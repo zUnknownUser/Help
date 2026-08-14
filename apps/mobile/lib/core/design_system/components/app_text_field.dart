@@ -15,6 +15,9 @@ class AppTextField extends StatelessWidget {
     this.onFieldSubmitted,
     this.enabled = true,
     this.fieldKey,
+    this.minLines = 1,
+    this.maxLines = 1,
+    this.maxLength,
     super.key,
   });
 
@@ -31,6 +34,9 @@ class AppTextField extends StatelessWidget {
   final ValueChanged<String>? onFieldSubmitted;
   final bool enabled;
   final Key? fieldKey;
+  final int? minLines;
+  final int? maxLines;
+  final int? maxLength;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +50,9 @@ class AppTextField extends StatelessWidget {
       autofillHints: autofillHints,
       obscureText: obscureText,
       onFieldSubmitted: onFieldSubmitted,
+      minLines: minLines,
+      maxLines: maxLines,
+      maxLength: maxLength,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,

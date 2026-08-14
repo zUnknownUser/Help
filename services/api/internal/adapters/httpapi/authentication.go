@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -14,11 +15,13 @@ func requireAuth(verifier ports.IDTokenVerifier, next http.Handler) http.Handler
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rawToken, ok := bearerToken(r.Header.Get("Authorization"))
 		if !ok || verifier == nil {
+			slog.WarnContext(r.Context(), "authentication header rejected", "method", r.Method, "path", r.URL.Path)
 			writeUnauthorized(w)
 			return
 		}
 		identity, err := verifier.VerifyIDToken(r.Context(), rawToken)
 		if err != nil {
+			slog.WarnContext(r.Context(), "authentication token rejected", "method", r.Method, "path", r.URL.Path)
 			writeUnauthorized(w)
 			return
 		}

@@ -13,10 +13,11 @@ try {
         --network api_default `
         -e "DATABASE_URL=$databaseURL" `
         -e "CHAT_TEST_DATABASE_URL=$databaseURL" `
+        -e "TEST_DATABASE_URL=$databaseURL" `
         -v "${apiDirectory}:/src" `
         -w /src `
         golang:1.26.6-alpine `
-        sh -c 'go run ./cmd/migrate && go test ./internal/adapters/httpapi -run TestRealtimeTwoClients -count=1 && go test ./internal/adapters/httpapi -run TestChatRepository -count=1'
+        sh -c 'go run ./cmd/migrate && go test ./internal/adapters/httpapi -run TestRealtimeTwoClients -count=1 && go test ./internal/adapters/httpapi -run TestChatRepository -count=1 && go test ./internal/adapters/postgres/catalog -run TestSearchWithLocation -count=1 && go test ./internal/adapters/postgres/providerworkspace -run TestPublishedProviderService -count=1'
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 finally {

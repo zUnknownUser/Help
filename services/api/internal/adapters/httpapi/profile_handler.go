@@ -75,6 +75,7 @@ func (handler *ProfileHandler) register(
 		writeProfileUnavailable(w)
 		return
 	}
+	slog.InfoContext(r.Context(), "profile registered", "user_id", identity.UID, "role", input.Role)
 	writeJSON(w, http.StatusCreated, newProfileEnvelope(profile))
 }
 

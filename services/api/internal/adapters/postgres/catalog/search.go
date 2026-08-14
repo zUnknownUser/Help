@@ -28,15 +28,17 @@ func (repository *Repository) Search(
 		return domaincatalog.Page{}, err
 	}
 	query, order := catalogQuery(filters.Sort, cursor != nil)
-	var cursorValue, cursorID *string
-	if cursor != nil {
-		cursorValue, cursorID = &cursor.Value, &cursor.ID
-	}
-	rows, err := repository.pool.Query(ctx, query+order+` LIMIT $12`,
+	args := []any{
 		filters.Query, filters.CategoryID, filters.MinPrice, filters.MaxPrice,
 		filters.MinRating, filters.Verified, filters.Latitude, filters.Longitude,
-		filters.RadiusKM, cursorValue, cursorID, filters.Limit+1,
-	)
+		filters.RadiusKM,
+	}
+	if cursor != nil {
+		args = append(args, cursor.Value, cursor.ID)
+	}
+	args = append(args, filters.Limit+1)
+	query += order + fmt.Sprintf(" LIMIT $%d", len(args))
+	rows, err := repository.pool.Query(ctx, query, args...)
 	if err != nil {
 		return domaincatalog.Page{}, fmt.Errorf("search catalog: %w", err)
 	}
@@ -96,7 +98,7 @@ func normalizeFilters(filters domaincatalog.Filters) domaincatalog.Filters {
 
 func catalogQuery(sort string, hasCursor bool) (string, string) {
 	base := `WITH listing AS (
-		SELECT s.id, s.provider_id, COALESCE(s.category_id, ''), s.title,
+		SELECT s.id, s.provider_id, COALESCE(s.category_id, '') AS category_id, s.title,
 		       s.rating::float8, s.reviews, s.duration_minutes, s.price_cents,
 		       s.old_price_cents, s.image_url, s.image_alignment, s.badge,
 		       p.name, p.verified, s.created_at,
@@ -108,10 +110,11 @@ func catalogQuery(sort string, hasCursor bool) (string, string) {
 		         )))
 		       END AS distance_km
 		FROM services s
-		JOIN providers p ON p.id = s.provider_id AND p.active AND p.onboarding_status = 'approved'
+		JOIN providers p ON p.id = s.provider_id AND p.active
+		  AND p.accepting_requests AND p.onboarding_status = 'approved'
 		LEFT JOIN user_addresses a
 		  ON a.firebase_uid = p.owner_uid AND a.is_default AND a.active
-		WHERE s.active
+		WHERE s.active AND s.deleted_at IS NULL
 		  AND ($1 = '' OR s.title ILIKE '%' || $1 || '%' OR p.name ILIKE '%' || $1 || '%')
 		  AND ($2 = '' OR s.category_id = $2)
 		  AND ($3::int IS NULL OR s.price_cents >= $3)

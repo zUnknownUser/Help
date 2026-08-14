@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help/features/auth/data/data_sources/http_email_verification_remote_data_source.dart';
 import 'package:help/features/auth/data/errors/auth_data_exception.dart';
@@ -34,6 +36,25 @@ void main() {
           (error) => error.code,
           'code',
           AuthDataErrorCode.tooManyRequests,
+        ),
+      ),
+    );
+  });
+  test('traduz timeout em falha de rede', () async {
+    final pending = Completer<http.Response>();
+    final dataSource = HttpEmailVerificationRemoteDataSource(
+      client: MockClient((_) => pending.future),
+      baseUrl: 'https://api.example.com',
+      timeout: const Duration(milliseconds: 10),
+    );
+
+    await expectLater(
+      dataSource.request(),
+      throwsA(
+        isA<AuthDataException>().having(
+          (error) => error.code,
+          'code',
+          AuthDataErrorCode.network,
         ),
       ),
     );

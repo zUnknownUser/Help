@@ -31,6 +31,8 @@ type RouterDependencies struct {
 	NotificationMarker         ports.NotificationMarker
 	HomeGetter                 ports.HomeGetter
 	CatalogSearcher            ports.CatalogSearcher
+	ProviderHomeGetter         ports.ProviderHomeGetter
+	ProviderServiceManager     ports.ProviderServiceManager
 	DeviceRepository           ports.DeviceRepository
 	UserDirectory              ports.UserDirectory
 	ChatService                *applicationchat.Service
@@ -82,6 +84,13 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 		"GET /v1/services",
 		requireAuth(dependencies.TokenVerifier, NewCatalogHandler(dependencies.CatalogSearcher)),
 	)
+	providerHandler := NewProviderHandler(dependencies.ProviderHomeGetter, dependencies.ProviderServiceManager)
+	mux.Handle("GET /v1/provider/home", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(providerHandler.Home)))
+	mux.Handle("POST /v1/provider/services", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(providerHandler.CreateService)))
+	mux.Handle("PUT /v1/provider/services/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(providerHandler.UpdateService)))
+	mux.Handle("PATCH /v1/provider/services/{id}/publication", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(providerHandler.SetPublication)))
+	mux.Handle("DELETE /v1/provider/services/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(providerHandler.DeleteService)))
+	mux.Handle("PATCH /v1/provider/availability", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(providerHandler.SetAvailability)))
 	deviceHandler := NewDeviceHandler(dependencies.DeviceRepository)
 	mux.Handle("POST /v1/devices", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(deviceHandler.Register)))
 	mux.Handle("DELETE /v1/devices/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(deviceHandler.Disable)))

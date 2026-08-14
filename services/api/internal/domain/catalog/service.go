@@ -7,6 +7,7 @@ type Service struct {
 	ProviderID      string
 	CategoryID      string
 	Title           string
+	Description     string
 	Rating          float64
 	Reviews         int
 	DurationMinutes int
@@ -15,8 +16,11 @@ type Service struct {
 	ImageURL        string
 	ImageAlignment  float64
 	Badge           string
+	Active          bool
 	DistanceKM      *float64
+	PublishedAt     *time.Time
 	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type Filters struct {

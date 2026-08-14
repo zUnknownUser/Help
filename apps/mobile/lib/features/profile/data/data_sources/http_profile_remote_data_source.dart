@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -11,24 +13,31 @@ class HttpProfileRemoteDataSource implements ProfileRemoteDataSource {
   factory HttpProfileRemoteDataSource({
     required http.Client client,
     required String baseUrl,
-  }) => HttpProfileRemoteDataSource._(client, baseUrl);
+    Duration timeout = const Duration(seconds: 8),
+  }) => HttpProfileRemoteDataSource._(client, baseUrl, timeout);
 
-  const HttpProfileRemoteDataSource._(this._client, this._baseUrl);
+  const HttpProfileRemoteDataSource._(
+    this._client,
+    this._baseUrl,
+    this._timeout,
+  );
 
   final http.Client _client;
   final String _baseUrl;
+  final Duration _timeout;
 
   Uri get _profileUri => Uri.parse('$_baseUrl/v1/profile');
 
   @override
   Future<UserProfileModel> getCurrent() async {
     try {
-      return _decode(await _client.get(_profileUri));
+      return _decode(await _client.get(_profileUri).timeout(_timeout));
+    } on TimeoutException catch (error) {
+      throw _networkError(error);
+    } on SocketException catch (error) {
+      throw _networkError(error);
     } on http.ClientException catch (error) {
-      throw ProfileDataException(
-        ProfileDataErrorCode.network,
-        debugMessage: '$error',
-      );
+      throw _networkError(error);
     }
   }
 
@@ -38,17 +47,20 @@ class HttpProfileRemoteDataSource implements ProfileRemoteDataSource {
     required UserRole role,
   }) async {
     try {
-      final response = await _client.post(
-        _profileUri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'display_name': displayName, 'role': role.value}),
-      );
+      final response = await _client
+          .post(
+            _profileUri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'display_name': displayName, 'role': role.value}),
+          )
+          .timeout(_timeout);
       return _decode(response);
+    } on TimeoutException catch (error) {
+      throw _networkError(error);
+    } on SocketException catch (error) {
+      throw _networkError(error);
     } on http.ClientException catch (error) {
-      throw ProfileDataException(
-        ProfileDataErrorCode.network,
-        debugMessage: '$error',
-      );
+      throw _networkError(error);
     }
   }
 
@@ -81,4 +93,9 @@ class HttpProfileRemoteDataSource implements ProfileRemoteDataSource {
       );
     }
   }
+
+  ProfileDataException _networkError(Object error) => ProfileDataException(
+    ProfileDataErrorCode.network,
+    debugMessage: '$error',
+  );
 }

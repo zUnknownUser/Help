@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -24,14 +26,35 @@ class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
     required String password,
   }) async {
     try {
-      final credential = await _firebaseAuth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final credential = await _firebaseAuth
+          .createUserWithEmailAndPassword(email: email, password: password)
+          .timeout(const Duration(seconds: 20));
       final user = credential.user;
-      await user?.updateDisplayName(displayName);
-      await user?.reload();
-      return _requireUser(_firebaseAuth.currentUser ?? user);
+      try {
+        await user
+            ?.updateDisplayName(displayName)
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // Display name is also persisted in our profile API and must not block
+        // account creation when Firebase profile propagation is slow.
+      }
+      final created = _requireUser(_firebaseAuth.currentUser ?? user);
+      return AuthUserModel(
+        id: created.id,
+        email: created.email,
+        displayName: displayName.trim(),
+        photoUrl: created.photoUrl,
+        emailVerified: created.emailVerified,
+      );
+    } on TimeoutException catch (error) {
+      final current = _firebaseAuth.currentUser;
+      if (current?.email?.trim().toLowerCase() == email.trim().toLowerCase()) {
+        return _toModel(current)!;
+      }
+      throw AuthDataException(
+        AuthDataErrorCode.network,
+        debugMessage: '$error',
+      );
     } on FirebaseAuthException catch (error) {
       throw _fromFirebase(error);
     }
@@ -43,11 +66,15 @@ class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
     required String password,
   }) async {
     try {
-      final credential = await _firebaseAuth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final credential = await _firebaseAuth
+          .signInWithEmailAndPassword(email: email, password: password)
+          .timeout(const Duration(seconds: 20));
       return _requireUser(credential.user);
+    } on TimeoutException catch (error) {
+      throw AuthDataException(
+        AuthDataErrorCode.network,
+        debugMessage: '$error',
+      );
     } on FirebaseAuthException catch (error) {
       throw _fromFirebase(error);
     }
@@ -67,10 +94,15 @@ class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
       }
 
       final googleCredential = GoogleAuthProvider.credential(idToken: idToken);
-      final credential = await _firebaseAuth.signInWithCredential(
-        googleCredential,
-      );
+      final credential = await _firebaseAuth
+          .signInWithCredential(googleCredential)
+          .timeout(const Duration(seconds: 20));
       return _requireUser(credential.user);
+    } on TimeoutException catch (error) {
+      throw AuthDataException(
+        AuthDataErrorCode.network,
+        debugMessage: '$error',
+      );
     } on GoogleSignInException catch (error) {
       throw _fromGoogle(error);
     } on FirebaseAuthException catch (error) {
@@ -81,8 +113,15 @@ class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
   @override
   Future<AuthUserModel> refreshCurrentUser() async {
     try {
-      await _firebaseAuth.currentUser?.reload();
+      await _firebaseAuth.currentUser?.reload().timeout(
+        const Duration(seconds: 10),
+      );
       return _requireUser(_firebaseAuth.currentUser);
+    } on TimeoutException catch (error) {
+      throw AuthDataException(
+        AuthDataErrorCode.network,
+        debugMessage: '$error',
+      );
     } on FirebaseAuthException catch (error) {
       throw _fromFirebase(error);
     }
@@ -91,21 +130,28 @@ class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
   @override
   Future<void> signOut() async {
     try {
-      await _firebaseAuth.signOut();
+      await _firebaseAuth.signOut().timeout(const Duration(seconds: 10));
+    } on TimeoutException catch (error) {
+      throw AuthDataException(
+        AuthDataErrorCode.network,
+        debugMessage: '$error',
+      );
     } on FirebaseAuthException catch (error) {
       throw _fromFirebase(error);
     }
 
     try {
       await _ensureGoogleInitialized();
-      await _googleSignIn.signOut();
+      await _googleSignIn.signOut().timeout(const Duration(seconds: 10));
     } on GoogleSignInException catch (error) {
       if (_fromGoogle(error).code != AuthDataErrorCode.configuration) rethrow;
     }
   }
 
   Future<void> _ensureGoogleInitialized() {
-    return _googleInitialization ??= _googleSignIn.initialize();
+    return _googleInitialization ??= _googleSignIn.initialize().timeout(
+      const Duration(seconds: 20),
+    );
   }
 
   AuthUserModel _requireUser(User? user) {

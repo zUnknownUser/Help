@@ -24,11 +24,13 @@ import (
 	postgresnotifications "github.com/vendlydigital/help/services/api/internal/adapters/postgres/notifications"
 	postgresprofiles "github.com/vendlydigital/help/services/api/internal/adapters/postgres/profiles"
 	postgrespromotions "github.com/vendlydigital/help/services/api/internal/adapters/postgres/promotions"
+	postgresprovider "github.com/vendlydigital/help/services/api/internal/adapters/postgres/providerworkspace"
 	"github.com/vendlydigital/help/services/api/internal/adapters/realtime"
 	applicationauth "github.com/vendlydigital/help/services/api/internal/application/auth"
 	applicationchat "github.com/vendlydigital/help/services/api/internal/application/chat"
 	applicationhome "github.com/vendlydigital/help/services/api/internal/application/home"
 	applicationprofiles "github.com/vendlydigital/help/services/api/internal/application/profiles"
+	applicationprovider "github.com/vendlydigital/help/services/api/internal/application/providerworkspace"
 	applicationpush "github.com/vendlydigital/help/services/api/internal/application/push"
 	"github.com/vendlydigital/help/services/api/internal/config"
 	"github.com/vendlydigital/help/services/api/internal/database"
@@ -95,8 +97,12 @@ func run() error {
 	saveDefaultLocation := applicationprofiles.NewSaveDefaultLocation(locationRepository)
 	viewerRepository := postgreshome.NewViewerRepository(pool)
 	catalogRepository := postgrescatalog.NewRepository(pool)
+	categoryRepository := postgrescategories.NewRepository(pool)
+	providerRepository := postgresprovider.NewRepository(pool)
+	providerHome := applicationprovider.NewGetHome(providerRepository, categoryRepository)
+	providerManager := applicationprovider.NewManager(providerRepository)
 	getHomeBase := applicationhome.NewGetHomeBase(
-		postgrescategories.NewRepository(pool),
+		categoryRepository,
 		postgrespromotions.NewRepository(pool),
 		postgreshome.NewRepository(pool),
 	)
@@ -124,6 +130,8 @@ func run() error {
 		NotificationMarker:         viewerRepository,
 		HomeGetter:                 getHome,
 		CatalogSearcher:            catalogRepository,
+		ProviderHomeGetter:         providerHome,
+		ProviderServiceManager:     providerManager,
 		DeviceRepository:           deviceRepository,
 		UserDirectory:              profileRepository,
 		ChatService:                chatService,

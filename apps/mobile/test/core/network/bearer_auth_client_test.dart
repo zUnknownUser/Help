@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help/core/network/bearer_auth_client.dart';
 import 'package:http/http.dart' as http;
@@ -40,4 +42,22 @@ void main() {
       expect(captured.headers, isNot(contains('authorization')));
     },
   );
+  test('interrompe token travado antes de enviar a requisiÃ§Ã£o', () async {
+    final pendingToken = Completer<String?>();
+    var requests = 0;
+    final client = BearerAuthClient(
+      inner: MockClient((request) async {
+        requests++;
+        return http.Response('{}', 200);
+      }),
+      tokenProvider: () => pendingToken.future,
+      tokenTimeout: const Duration(milliseconds: 10),
+    );
+
+    await expectLater(
+      client.get(Uri.parse('https://api.example.com/profile')),
+      throwsA(isA<http.ClientException>()),
+    );
+    expect(requests, 0);
+  });
 }

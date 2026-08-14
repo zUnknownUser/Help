@@ -10,6 +10,7 @@ import '../providers/profile_providers.dart';
 import '../../domain/entities/user_role.dart';
 import '../../../chat/presentation/pages/chat_list_page.dart';
 import '../../../chat/presentation/providers/chat_providers.dart';
+import '../../../provider/presentation/pages/provider_dashboard_page.dart';
 
 class ProviderHomePage extends ConsumerWidget {
   const ProviderHomePage({required this.profile, super.key});
@@ -18,6 +19,9 @@ class ProviderHomePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (profile.providerStatus == ProviderOnboardingStatus.approved) {
+      return const ProviderDashboardPage();
+    }
     final content = _contentFor(profile.providerStatus);
     final roleState = ref.watch(profileRoleControllerProvider);
     final unreadChat = ref.watch(unreadChatCountProvider).value ?? 0;

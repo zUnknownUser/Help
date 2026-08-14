@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -51,4 +52,26 @@ void main() {
 
     expect(dataSource.getCurrent, throwsA(isA<ProfileDataException>()));
   });
+  test(
+    'encerra cadastro sem conexÃ£o em vez de carregar para sempre',
+    () async {
+      final pending = Completer<http.Response>();
+      final dataSource = HttpProfileRemoteDataSource(
+        client: MockClient((_) => pending.future),
+        baseUrl: 'https://api.example.com',
+        timeout: const Duration(milliseconds: 10),
+      );
+
+      await expectLater(
+        dataSource.register(displayName: 'Maria', role: UserRole.customer),
+        throwsA(
+          isA<ProfileDataException>().having(
+            (error) => error.code,
+            'code',
+            ProfileDataErrorCode.network,
+          ),
+        ),
+      );
+    },
+  );
 }

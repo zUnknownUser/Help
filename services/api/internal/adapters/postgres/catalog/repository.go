@@ -15,11 +15,17 @@ func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: po
 
 func (r *Repository) ListRecommended(ctx context.Context) ([]domaincatalog.Service, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, provider_id, COALESCE(category_id, ''), title, rating::float8, reviews, duration_minutes,
-		       price_cents, old_price_cents, image_url, image_alignment, badge
-		FROM services
-		WHERE active AND featured_position IS NOT NULL
-		ORDER BY featured_position
+		SELECT service.id, service.provider_id, COALESCE(service.category_id, ''),
+		       service.title, service.rating::float8, service.reviews, service.duration_minutes,
+		       service.price_cents, service.old_price_cents, service.image_url,
+		       service.image_alignment, service.badge
+		FROM services service
+		JOIN providers provider ON provider.id = service.provider_id
+		  AND provider.active AND provider.accepting_requests
+		  AND provider.onboarding_status = 'approved'
+		WHERE service.active AND service.deleted_at IS NULL
+		  AND service.featured_position IS NOT NULL
+		ORDER BY service.featured_position
 		LIMIT 12`)
 	if err != nil {
 		return nil, fmt.Errorf("query recommended services: %w", err)

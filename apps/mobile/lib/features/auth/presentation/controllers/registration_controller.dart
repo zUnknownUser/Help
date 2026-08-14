@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/logging/app_logger.dart';
 import '../../../profile/domain/entities/user_role.dart';
 import '../../../profile/presentation/providers/profile_providers.dart';
 import '../providers/auth_providers.dart';
@@ -30,6 +31,7 @@ class RegistrationController extends Notifier<RegistrationState> {
       status: RegistrationStatus.loading,
       clearFailures: true,
     );
+    AppLogger.auth('registration_started', fields: {'role': role.value});
 
     if (!state.accountCreated) {
       final authResult = await ref.read(registerWithEmailProvider)(
@@ -41,6 +43,10 @@ class RegistrationController extends Notifier<RegistrationState> {
       final created = authResult.fold(
         onSuccess: (_) => true,
         onFailure: (failure) {
+          AppLogger.auth(
+            'registration_account_failed',
+            fields: {'failure': failure.type.name},
+          );
           state = state.copyWith(
             status: RegistrationStatus.failure,
             authFailure: failure,
@@ -50,6 +56,7 @@ class RegistrationController extends Notifier<RegistrationState> {
       );
       if (!created) return false;
       state = state.copyWith(accountCreated: true);
+      AppLogger.auth('registration_account_created');
     }
 
     final profileResult = await ref.read(registerProfileProvider)(
@@ -59,6 +66,10 @@ class RegistrationController extends Notifier<RegistrationState> {
     if (!ref.mounted) return false;
     return profileResult.fold(
       onSuccess: (_) {
+        AppLogger.auth(
+          'registration_profile_created',
+          fields: {'role': role.value},
+        );
         ref.invalidate(currentProfileProvider);
         state = state.copyWith(
           status: RegistrationStatus.success,
@@ -67,6 +78,10 @@ class RegistrationController extends Notifier<RegistrationState> {
         return true;
       },
       onFailure: (failure) {
+        AppLogger.auth(
+          'registration_profile_failed',
+          fields: {'failure': failure.type.name},
+        );
         state = state.copyWith(
           status: RegistrationStatus.failure,
           profileFailure: failure,
