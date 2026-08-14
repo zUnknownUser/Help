@@ -1,0 +1,5 @@
+# Copie para key.properties e mantenha os valores fora do Git.
+storePassword=
+keyPassword=
+keyAlias=
+storeFile=C:\\caminho\\seguro\\help-release.jks

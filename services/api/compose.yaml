@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: help
+      POSTGRES_USER: help
+      POSTGRES_PASSWORD: help_local_only
+    ports:
+      - "5432:5432"
+    volumes:
+      - help_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U help -d help"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build: .
+    entrypoint: ["/migrate"]
+    environment:
+      DATABASE_URL: postgres://help:help_local_only@db:5432/help?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+    env_file:
+      - .env.local
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://help:help_local_only@db:5432/help?sslmode=disable
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-service-account.json
+    volumes:
+      - ./.secrets/firebase-service-account.json:/run/secrets/firebase-service-account.json:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "/api", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  help_postgres_data:
