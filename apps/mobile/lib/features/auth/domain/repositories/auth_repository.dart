@@ -12,7 +12,15 @@ abstract interface class AuthRepository {
     required String password,
   });
 
+  Future<AuthResult<AuthUser>> signUpWithEmail({
+    required String displayName,
+    required String email,
+    required String password,
+  });
+
   Future<AuthResult<AuthUser>> signInWithGoogle();
+
+  Future<AuthResult<AuthUser>> refreshCurrentUser();
 
   Future<AuthResult<void>> signOut();
 }

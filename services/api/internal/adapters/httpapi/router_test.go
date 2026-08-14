@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vendlydigital/help/services/api/internal/adapters/httpapi"
+	"github.com/vendlydigital/help/services/api/internal/application/ports"
 	domainauth "github.com/vendlydigital/help/services/api/internal/domain/auth"
 )
 
@@ -31,6 +32,29 @@ func (l *capturingLimiter) Allow(key string) bool {
 type readinessStub struct{ err error }
 
 func (stub readinessStub) Ping(context.Context) error { return stub.err }
+
+type tokenVerifierStub struct {
+	identity ports.AuthenticatedIdentity
+	err      error
+}
+
+func (stub tokenVerifierStub) VerifyIDToken(
+	context.Context,
+	string,
+) (ports.AuthenticatedIdentity, error) {
+	return stub.identity, stub.err
+}
+
+type emailVerificationRequesterSpy struct {
+	email domainauth.Email
+	calls int
+}
+
+func (spy *emailVerificationRequesterSpy) Execute(_ context.Context, email domainauth.Email) error {
+	spy.calls++
+	spy.email = email
+	return nil
+}
 
 type noopRequester struct{}
 
@@ -132,11 +156,52 @@ func TestRouterReadinessReflectsDatabaseState(t *testing.T) {
 	}
 }
 
+func TestRouterProtectsAndSendsEmailVerification(t *testing.T) {
+	t.Parallel()
+
+	email, _ := domainauth.ParseEmail("user@example.com")
+	requester := &emailVerificationRequesterSpy{}
+	router := httpapi.NewRouter(httpapi.RouterDependencies{
+		PasswordResetRequester:     noopRequester{},
+		PasswordResetLimiter:       httpapi.NewMemoryRateLimiter(5, time.Minute),
+		EmailVerificationRequester: requester,
+		EmailVerificationLimiter:   httpapi.NewMemoryRateLimiter(3, time.Minute),
+		TokenVerifier: tokenVerifierStub{identity: ports.AuthenticatedIdentity{
+			UID: "firebase-uid", Email: email,
+		}},
+		HomeGetter:       homeGetterStub{},
+		ReadinessChecker: readinessStub{},
+	})
+
+	unauthorized := httptest.NewRecorder()
+	router.ServeHTTP(
+		unauthorized,
+		httptest.NewRequest(http.MethodPost, "/v1/auth/email-verification", nil),
+	)
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("sem token status = %d; esperado 401", unauthorized.Code)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/auth/email-verification", nil)
+	request.Header.Set("Authorization", "Bearer valid-token")
+	accepted := httptest.NewRecorder()
+	router.ServeHTTP(accepted, request)
+	if accepted.Code != http.StatusAccepted {
+		t.Fatalf("com token status = %d; esperado 202", accepted.Code)
+	}
+	if requester.calls != 1 || requester.email != email {
+		t.Fatalf("requester recebeu e-mail incorreto: %q", requester.email)
+	}
+}
+
 func newTestRouter(requester noopRequester, limiter httpapi.RequestLimiter) http.Handler {
 	return httpapi.NewRouter(httpapi.RouterDependencies{
-		PasswordResetRequester: requester,
-		PasswordResetLimiter:   limiter,
-		HomeGetter:             homeGetterStub{},
-		ReadinessChecker:       readinessStub{},
+		PasswordResetRequester:     requester,
+		PasswordResetLimiter:       limiter,
+		EmailVerificationRequester: &emailVerificationRequesterSpy{},
+		EmailVerificationLimiter:   httpapi.NewMemoryRateLimiter(3, time.Minute),
+		TokenVerifier:              tokenVerifierStub{},
+		HomeGetter:                 homeGetterStub{},
+		ReadinessChecker:           readinessStub{},
 	})
 }

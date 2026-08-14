@@ -19,4 +19,6 @@ type Action struct {
 	Label   string
 	IconKey string
 	Style   string
+	Type    string
+	Target  string
 }

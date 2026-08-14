@@ -90,53 +90,6 @@ CREATE TABLE promotion_actions (
     UNIQUE (promotion_id, position)
 );
 
-INSERT INTO home_configuration (address, availability_label, search_placeholder)
-VALUES ('Av. Eduardo Ribeiro, 520', 'Serviços disponíveis na sua região', 'Busque por um serviço ou profissional');
-
-INSERT INTO home_benefits (id, label, icon_key, position) VALUES
-    ('verified', E'Profissionais\nverificados', 'verified', 1),
-    ('pricing', E'Preços\ntransparentes', 'pricing', 2),
-    ('warranty', E'Garantia de\naté 30 dias', 'warranty', 3),
-    ('tracking', E'Acompanhe em\ntempo real', 'location', 4);
-
-INSERT INTO categories (id, name, icon_key, position) VALUES
-    ('home-cleaning', E'Limpeza\nresidencial', 'home', 1),
-    ('air-conditioning', E'Reparo de\nar-condicionado', 'ac', 2),
-    ('plumbing', 'Encanador', 'plumbing', 3),
-    ('electrical', 'Eletricista', 'electrical', 4),
-    ('washing-machine', E'Máquina de\nlavar', 'laundry', 5),
-    ('refrigerator', 'Geladeira', 'refrigerator', 6),
-    ('microwave', 'Micro-ondas', 'microwave', 7),
-    ('more', E'Mais\nserviços', 'more', 8);
-
-INSERT INTO providers (id, name, verified)
-VALUES ('help-partner', 'Parceiro Help', true);
-
-INSERT INTO services (
-    id, provider_id, title, rating, reviews, duration_minutes, price_cents,
-    old_price_cents, image_alignment, badge, featured_position
-) VALUES
-    ('home-cleaning', 'help-partner', 'Limpeza residencial', 4.8, 2300, 150, 7900, 9900, 0.18, 'Mais vendido', 1),
-    ('air-conditioning-repair', 'help-partner', 'Reparo de ar-condicionado', 4.7, 1800, 60, 5900, 7900, 0.78, '', 2),
-    ('electrical-maintenance', 'help-partner', 'Manutenção elétrica', 4.9, 940, 90, 8900, 10900, 0.52, '', 3);
-
-INSERT INTO promotions (id, eyebrow, title, position) VALUES
-    ('air-conditioning', 'Seu ar não está gelando?', 'A gente resolve rápido.', 1),
-    ('trusted-home', 'Sua casa em boas mãos', 'Profissionais perto de você.', 2),
-    ('schedule', 'Precisa para outro dia?', 'Agende no melhor horário.', 3);
-
-INSERT INTO promotion_features (promotion_id, position, icon_key, label) VALUES
-    ('air-conditioning', 1, 'fast', 'Atendimento a partir de 30 min'),
-    ('air-conditioning', 2, 'verified', 'Profissionais verificados'),
-    ('trusted-home', 1, 'verified', 'Parceiros avaliados pela comunidade'),
-    ('schedule', 1, 'calendar', 'Escolha o dia e horário');
-
-INSERT INTO promotion_actions (id, promotion_id, position, label, icon_key, style) VALUES
-    ('fast-service', 'air-conditioning', 1, 'Serviço rápido', 'fast', 'primary'),
-    ('schedule', 'air-conditioning', 2, 'Agendar', 'calendar', 'secondary'),
-    ('explore', 'trusted-home', 1, 'Explorar serviços', 'search', 'primary'),
-    ('schedule', 'schedule', 1, 'Agendar', 'calendar', 'primary');
-
 -- +goose Down
 DROP TABLE IF EXISTS promotion_actions;
 DROP TABLE IF EXISTS promotion_features;

@@ -3,6 +3,7 @@ abstract final class ApiBaseUrl {
     required String configuredUrl,
     required bool isRelease,
     required bool isAndroid,
+    bool allowInsecureHttp = false,
   }) {
     final value = configuredUrl.trim();
     if (value.isEmpty) {
@@ -24,7 +25,7 @@ abstract final class ApiBaseUrl {
     if (!isValid) {
       throw ArgumentError.value(configuredUrl, 'API_BASE_URL', 'invalid URL');
     }
-    if (isRelease && uri.scheme != 'https') {
+    if (isRelease && uri.scheme != 'https' && !allowInsecureHttp) {
       throw ArgumentError.value(
         configuredUrl,
         'API_BASE_URL',

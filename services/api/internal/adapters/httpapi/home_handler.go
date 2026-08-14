@@ -14,7 +14,12 @@ func NewHomeHandler(getter ports.HomeGetter) *HomeHandler {
 }
 
 func (h *HomeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	content, err := h.getter.Execute(r.Context())
+	identity, ok := authenticatedIdentity(r.Context())
+	if !ok {
+		writeUnauthorized(w)
+		return
+	}
+	content, err := h.getter.Execute(r.Context(), identity.UID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "load home failed", "error", err)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
@@ -22,6 +27,6 @@ func (h *HomeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	w.Header().Set("Cache-Control", "private, max-age=30")
+	w.Header().Set("Cache-Control", "private, no-store")
 	writeJSON(w, http.StatusOK, newHomeResponse(content))
 }

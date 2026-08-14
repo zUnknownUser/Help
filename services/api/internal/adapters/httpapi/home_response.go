@@ -7,17 +7,23 @@ type homeEnvelope struct {
 }
 
 type homeData struct {
-	Location            homeLocation    `json:"location"`
-	SearchPlaceholder   string          `json:"search_placeholder"`
-	Promotions          []homePromotion `json:"promotions"`
-	Categories          []homeCategory  `json:"categories"`
-	RecommendedServices []homeService   `json:"recommended_services"`
-	Benefits            []homeBenefit   `json:"benefits"`
+	Location                homeLocation       `json:"location"`
+	SearchPlaceholder       string             `json:"search_placeholder"`
+	CategoriesTitle         string             `json:"categories_title"`
+	RecommendationsTitle    string             `json:"recommendations_title"`
+	UnreadNotificationCount int                `json:"unread_notification_count"`
+	Notifications           []homeNotification `json:"notifications"`
+	Promotions              []homePromotion    `json:"promotions"`
+	Categories              []homeCategory     `json:"categories"`
+	RecommendedServices     []homeService      `json:"recommended_services"`
+	Benefits                []homeBenefit      `json:"benefits"`
 }
 
 type homeLocation struct {
-	Address           string `json:"address"`
-	AvailabilityLabel string `json:"availability_label"`
+	Address           string   `json:"address"`
+	AvailabilityLabel string   `json:"availability_label"`
+	Latitude          *float64 `json:"latitude"`
+	Longitude         *float64 `json:"longitude"`
 }
 
 type homePromotion struct {
@@ -39,12 +45,22 @@ type promotionAction struct {
 	Label   string `json:"label"`
 	IconKey string `json:"icon_key"`
 	Style   string `json:"style"`
+	Type    string `json:"type"`
+	Target  string `json:"target,omitempty"`
 }
 
 type homeCategory struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
 	IconKey string `json:"icon_key"`
+}
+
+type homeNotification struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	Read      bool   `json:"read"`
+	CreatedAt string `json:"created_at"`
 }
 
 type homeService struct {
@@ -59,6 +75,8 @@ type homeService struct {
 	ImageAlignment  float64      `json:"image_alignment"`
 	Badge           string       `json:"badge,omitempty"`
 	Provider        homeProvider `json:"provider"`
+	CategoryID      string       `json:"category_id,omitempty"`
+	DistanceKM      *float64     `json:"distance_km,omitempty"`
 }
 
 type homeProvider struct {
@@ -76,13 +94,18 @@ type homeBenefit struct {
 func newHomeResponse(content domainhome.Content) homeEnvelope {
 	data := homeData{
 		Location: homeLocation{
-			Address: content.Frame.Location.Address, AvailabilityLabel: content.Frame.Location.AvailabilityLabel,
+			Address: content.Viewer.Location.Address, AvailabilityLabel: content.Viewer.Location.AvailabilityLabel,
+			Latitude: content.Viewer.Location.Latitude, Longitude: content.Viewer.Location.Longitude,
 		},
-		SearchPlaceholder:   content.Frame.SearchPlaceholder,
-		Promotions:          make([]homePromotion, 0, len(content.Promotions)),
-		Categories:          make([]homeCategory, 0, len(content.Categories)),
-		RecommendedServices: make([]homeService, 0, len(content.Services)),
-		Benefits:            make([]homeBenefit, 0, len(content.Frame.Benefits)),
+		SearchPlaceholder:       content.Frame.SearchPlaceholder,
+		CategoriesTitle:         content.Frame.CategoriesTitle,
+		RecommendationsTitle:    content.Frame.RecommendationsTitle,
+		UnreadNotificationCount: content.Viewer.UnreadNotificationCount,
+		Notifications:           make([]homeNotification, 0, len(content.Viewer.Notifications)),
+		Promotions:              make([]homePromotion, 0, len(content.Promotions)),
+		Categories:              make([]homeCategory, 0, len(content.Categories)),
+		RecommendedServices:     make([]homeService, 0, len(content.Services)),
+		Benefits:                make([]homeBenefit, 0, len(content.Frame.Benefits)),
 	}
 	for _, promotion := range content.Promotions {
 		item := homePromotion{
@@ -95,7 +118,10 @@ func newHomeResponse(content domainhome.Content) homeEnvelope {
 			item.Features = append(item.Features, promotionFeature{IconKey: feature.IconKey, Label: feature.Label})
 		}
 		for _, action := range promotion.Actions {
-			item.Actions = append(item.Actions, promotionAction{ID: action.ID, Label: action.Label, IconKey: action.IconKey, Style: action.Style})
+			item.Actions = append(item.Actions, promotionAction{
+				ID: action.ID, Label: action.Label, IconKey: action.IconKey,
+				Style: action.Style, Type: action.Type, Target: action.Target,
+			})
 		}
 		data.Promotions = append(data.Promotions, item)
 	}
@@ -109,11 +135,18 @@ func newHomeResponse(content domainhome.Content) homeEnvelope {
 			DurationMinutes: service.DurationMinutes, PriceCents: service.PriceCents,
 			OldPriceCents: service.OldPriceCents, ImageURL: service.ImageURL,
 			ImageAlignment: service.ImageAlignment, Badge: service.Badge,
-			Provider: homeProvider{ID: provider.ID, Name: provider.Name, Verified: provider.Verified},
+			CategoryID: service.CategoryID,
+			Provider:   homeProvider{ID: provider.ID, Name: provider.Name, Verified: provider.Verified},
 		})
 	}
 	for _, benefit := range content.Frame.Benefits {
 		data.Benefits = append(data.Benefits, homeBenefit{ID: benefit.ID, Label: benefit.Label, IconKey: benefit.IconKey})
+	}
+	for _, notification := range content.Viewer.Notifications {
+		data.Notifications = append(data.Notifications, homeNotification{
+			ID: notification.ID, Title: notification.Title, Body: notification.Body,
+			Read: notification.Read, CreatedAt: notification.CreatedAt,
+		})
 	}
 	return homeEnvelope{Data: data}
 }

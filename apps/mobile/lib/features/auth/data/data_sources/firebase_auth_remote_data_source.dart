@@ -14,7 +14,27 @@ class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
 
   @override
   Stream<AuthUserModel?> watchAuthState() {
-    return _firebaseAuth.authStateChanges().map(_toModel);
+    return _firebaseAuth.userChanges().map(_toModel);
+  }
+
+  @override
+  Future<AuthUserModel> signUpWithEmail({
+    required String displayName,
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final credential = await _firebaseAuth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final user = credential.user;
+      await user?.updateDisplayName(displayName);
+      await user?.reload();
+      return _requireUser(_firebaseAuth.currentUser ?? user);
+    } on FirebaseAuthException catch (error) {
+      throw _fromFirebase(error);
+    }
   }
 
   @override
@@ -53,6 +73,16 @@ class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
       return _requireUser(credential.user);
     } on GoogleSignInException catch (error) {
       throw _fromGoogle(error);
+    } on FirebaseAuthException catch (error) {
+      throw _fromFirebase(error);
+    }
+  }
+
+  @override
+  Future<AuthUserModel> refreshCurrentUser() async {
+    try {
+      await _firebaseAuth.currentUser?.reload();
+      return _requireUser(_firebaseAuth.currentUser);
     } on FirebaseAuthException catch (error) {
       throw _fromFirebase(error);
     }
@@ -109,6 +139,8 @@ class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
       'wrong-password' => AuthDataErrorCode.invalidCredentials,
       'network-request-failed' => AuthDataErrorCode.network,
       'too-many-requests' => AuthDataErrorCode.tooManyRequests,
+      'email-already-in-use' => AuthDataErrorCode.emailAlreadyInUse,
+      'weak-password' => AuthDataErrorCode.weakPassword,
       'operation-not-allowed' => AuthDataErrorCode.configuration,
       _ => AuthDataErrorCode.unknown,
     };

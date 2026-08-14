@@ -18,6 +18,10 @@ type CatalogReader interface {
 	ListRecommended(ctx context.Context) ([]catalog.Service, error)
 }
 
+type CatalogSearcher interface {
+	Search(context.Context, catalog.Filters) (catalog.Page, error)
+}
+
 type PromotionReader interface {
 	ListActive(ctx context.Context) ([]promotions.Promotion, error)
 }
@@ -30,6 +34,18 @@ type HomeFrameReader interface {
 	GetFrame(ctx context.Context) (domainhome.Frame, error)
 }
 
+type HomeViewerReader interface {
+	GetViewer(ctx context.Context, uid string) (domainhome.Viewer, error)
+}
+
 type HomeGetter interface {
-	Execute(ctx context.Context) (domainhome.Content, error)
+	Execute(ctx context.Context, uid string) (domainhome.Content, error)
+}
+
+type HomeBaseGetter interface {
+	ExecuteBase(ctx context.Context) (domainhome.Content, error)
+}
+
+type NotificationMarker interface {
+	MarkRead(ctx context.Context, uid, notificationID string) error
 }

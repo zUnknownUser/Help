@@ -22,6 +22,8 @@ type actionRow struct {
 	Label   string `json:"label"`
 	IconKey string `json:"icon_key"`
 	Style   string `json:"style"`
+	Type    string `json:"type"`
+	Target  string `json:"target"`
 }
 
 func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
@@ -40,11 +42,11 @@ func (r *Repository) ListActive(ctx context.Context) ([]domainpromotions.Promoti
 		           ) f
 		       ), '[]'::jsonb),
 		       COALESCE((
-		           SELECT jsonb_agg(jsonb_build_object('id', a.id, 'label', a.label, 'icon_key', a.icon_key, 'style', a.style) ORDER BY a.position)
+		           SELECT jsonb_agg(jsonb_build_object('id', a.id, 'label', a.label, 'icon_key', a.icon_key, 'style', a.style, 'type', a.action_type, 'target', COALESCE(a.action_target, '')) ORDER BY a.position)
 		           FROM (
-		               SELECT id, label, icon_key, style, position
+		               SELECT id, label, icon_key, style, action_type, action_target, position
 		               FROM promotion_actions
-		               WHERE promotion_id = p.id
+		               WHERE promotion_id = p.id AND action_type <> 'none'
 		               ORDER BY position
 		               LIMIT 2
 		           ) a

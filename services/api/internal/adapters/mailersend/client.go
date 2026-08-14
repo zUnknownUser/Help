@@ -54,13 +54,39 @@ func (c *Client) SendPasswordReset(ctx context.Context, message ports.PasswordRe
 	if err != nil {
 		return fmt.Errorf("render template: %w", err)
 	}
+	return c.send(
+		ctx,
+		message.To.String(),
+		"Redefina sua senha do Help",
+		htmlBody,
+		"Recebemos uma solicitação para redefinir sua senha do Help. Acesse: "+message.ResetLink,
+	)
+}
 
+func (c *Client) SendEmailVerification(
+	ctx context.Context,
+	message ports.EmailVerificationEmail,
+) error {
+	htmlBody, err := renderEmailVerificationHTML(message.VerificationLink)
+	if err != nil {
+		return fmt.Errorf("render template: %w", err)
+	}
+	return c.send(
+		ctx,
+		message.To.String(),
+		"Confirme seu e-mail do Help",
+		htmlBody,
+		"Confirme seu e-mail para ativar sua conta do Help. Acesse: "+message.VerificationLink,
+	)
+}
+
+func (c *Client) send(ctx context.Context, to, subject, htmlBody, textBody string) error {
 	payload := map[string]any{
 		"from":    map[string]string{"email": c.fromEmail, "name": c.fromName},
-		"to":      []map[string]string{{"email": message.To.String()}},
-		"subject": "Redefina sua senha do Help",
+		"to":      []map[string]string{{"email": to}},
+		"subject": subject,
 		"html":    htmlBody,
-		"text":    "Recebemos uma solicitação para redefinir sua senha do Help. Acesse: " + message.ResetLink,
+		"text":    textBody,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

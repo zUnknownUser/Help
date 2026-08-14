@@ -5,17 +5,18 @@ import 'section_title.dart';
 import 'service_card.dart';
 
 class ServiceSection extends StatelessWidget {
-  const ServiceSection({required this.offers, super.key});
+  const ServiceSection({required this.title, required this.offers, super.key});
 
+  final String title;
   final List<ServiceOffer> offers;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 18, 16, 10),
-          child: SectionTitle(title: 'Recomendados para você'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
+          child: SectionTitle(title: title),
         ),
         SizedBox(
           height: 237,

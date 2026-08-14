@@ -65,4 +65,16 @@ void main() {
       }
     });
   });
+
+  test('permite HTTP em release somente quando autorizado explicitamente', () {
+    expect(
+      ApiBaseUrl.resolve(
+        configuredUrl: 'http://192.168.0.10:8080',
+        isRelease: true,
+        isAndroid: true,
+        allowInsecureHttp: true,
+      ),
+      'http://192.168.0.10:8080',
+    );
+  });
 }

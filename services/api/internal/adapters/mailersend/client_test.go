@@ -99,3 +99,34 @@ func TestClientDoesNotIncludeProviderBodyInErrors(t *testing.T) {
 		t.Fatalf("erro expôs resposta sensível do provedor: %v", err)
 	}
 }
+
+func TestClientSendsEmailVerification(t *testing.T) {
+	t.Parallel()
+
+	var payload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Errorf("payload inválido: %v", err)
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
+	client := mailersend.NewClient(mailersend.Config{
+		BaseURL: server.URL, APIToken: "token", FromEmail: "nao-responda@vendlydigital.com.br",
+		HTTPClient: server.Client(),
+	})
+	email, _ := domainauth.ParseEmail("user@example.com")
+
+	err := client.SendEmailVerification(context.Background(), ports.EmailVerificationEmail{
+		To: email, VerificationLink: "https://firebase.example/verify",
+	})
+	if err != nil {
+		t.Fatalf("SendEmailVerification() erro inesperado: %v", err)
+	}
+	if payload["subject"] != "Confirme seu e-mail do Help" {
+		t.Fatalf("subject inesperado: %v", payload["subject"])
+	}
+	if !strings.Contains(payload["html"].(string), "https://firebase.example/verify") {
+		t.Fatal("link de verificação ausente no HTML")
+	}
+}

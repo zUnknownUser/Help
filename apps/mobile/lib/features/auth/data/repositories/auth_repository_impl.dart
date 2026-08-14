@@ -27,9 +27,31 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<AuthResult<AuthUser>> signUpWithEmail({
+    required String displayName,
+    required String email,
+    required String password,
+  }) {
+    return guardAuthDataOperation(
+      () async => (await _remoteDataSource.signUpWithEmail(
+        displayName: displayName,
+        email: email,
+        password: password,
+      )).toEntity(),
+    );
+  }
+
+  @override
   Future<AuthResult<AuthUser>> signInWithGoogle() {
     return guardAuthDataOperation(
       () async => (await _remoteDataSource.signInWithGoogle()).toEntity(),
+    );
+  }
+
+  @override
+  Future<AuthResult<AuthUser>> refreshCurrentUser() {
+    return guardAuthDataOperation(
+      () async => (await _remoteDataSource.refreshCurrentUser()).toEntity(),
     );
   }
 

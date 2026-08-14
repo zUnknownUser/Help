@@ -6,6 +6,7 @@ import 'package:help/features/home/domain/entities/home_content.dart';
 import 'package:help/features/home/presentation/controllers/home_controller.dart';
 import 'package:help/features/home/presentation/pages/home_page.dart';
 import 'package:help/features/home/presentation/providers/home_providers.dart';
+import 'package:help/features/chat/presentation/providers/chat_providers.dart';
 
 import 'features/home/fixtures/home_content_fixture.dart';
 
@@ -20,6 +21,7 @@ void main() {
       ProviderScope(
         overrides: [
           homeControllerProvider.overrideWith(_FixtureHomeController.new),
+          unreadChatCountProvider.overrideWith((ref) => Stream.value(0)),
         ],
         child: MaterialApp(
           debugShowCheckedModeBanner: false,

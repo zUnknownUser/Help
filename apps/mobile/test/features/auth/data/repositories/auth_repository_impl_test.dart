@@ -39,6 +39,44 @@ void main() {
     },
   );
 
+  test('cria conta por e-mail e converte o usuário', () async {
+    const model = AuthUserModel(
+      id: '1',
+      email: 'user@email.com',
+      displayName: 'Maria Silva',
+    );
+    when(
+      () => remoteDataSource.signUpWithEmail(
+        displayName: 'Maria Silva',
+        email: 'user@email.com',
+        password: '12345678',
+      ),
+    ).thenAnswer((_) async => model);
+
+    final result = await repository.signUpWithEmail(
+      displayName: 'Maria Silva',
+      email: 'user@email.com',
+      password: '12345678',
+    );
+
+    expect(result, isA<Success>());
+    expect((result as Success).value, equals(model.toEntity()));
+  });
+
+  test('recarrega o usuário autenticado', () async {
+    const model = AuthUserModel(
+      id: '1',
+      email: 'user@email.com',
+      emailVerified: true,
+    );
+    when(remoteDataSource.refreshCurrentUser).thenAnswer((_) async => model);
+
+    final result = await repository.refreshCurrentUser();
+
+    expect(result, isA<Success>());
+    expect((result as Success).value, equals(model.toEntity()));
+  });
+
   test('traduz credenciais inválidas para falha de domínio', () async {
     when(
       () => remoteDataSource.signInWithEmail(

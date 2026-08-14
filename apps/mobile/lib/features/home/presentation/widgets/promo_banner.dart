@@ -5,9 +5,14 @@ import 'home_image.dart';
 import 'promo_banner_elements.dart';
 
 class PromoBanner extends StatelessWidget {
-  const PromoBanner({required this.promotion, super.key});
+  const PromoBanner({
+    required this.promotion,
+    required this.onAction,
+    super.key,
+  });
 
   final Promotion promotion;
+  final ValueChanged<PromotionAction> onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +112,9 @@ class PromoBanner extends StatelessWidget {
     final widgets = <Widget>[];
     for (final action in promotion.actions.take(2)) {
       if (widgets.isNotEmpty) widgets.add(const SizedBox(width: 7));
-      widgets.add(PromoActionButton(action: action, onTap: () {}));
+      widgets.add(
+        PromoActionButton(action: action, onTap: () => onAction(action)),
+      );
     }
     return widgets;
   }

@@ -6,6 +6,7 @@ class ServiceOfferModel {
   const ServiceOfferModel({
     required this.id,
     required this.title,
+    required this.categoryId,
     required this.rating,
     required this.reviews,
     required this.durationMinutes,
@@ -15,12 +16,14 @@ class ServiceOfferModel {
     required this.provider,
     this.imageUrl,
     this.badge,
+    this.distanceKm,
   });
 
   factory ServiceOfferModel.fromJson(Map<String, dynamic> json) =>
       ServiceOfferModel(
         id: JsonReader.string(json, 'id'),
         title: JsonReader.string(json, 'title'),
+        categoryId: JsonReader.string(json, 'category_id'),
         rating: JsonReader.decimal(json, 'rating'),
         reviews: JsonReader.integer(json, 'reviews'),
         durationMinutes: JsonReader.integer(json, 'duration_minutes'),
@@ -29,6 +32,7 @@ class ServiceOfferModel {
         imageUrl: JsonReader.optionalString(json, 'image_url'),
         imageAlignment: JsonReader.decimal(json, 'image_alignment'),
         badge: JsonReader.optionalString(json, 'badge'),
+        distanceKm: JsonReader.optionalDecimal(json, 'distance_km'),
         provider: ServiceProviderModel.fromJson(
           JsonReader.map(json['provider'], 'provider'),
         ),
@@ -36,6 +40,7 @@ class ServiceOfferModel {
 
   final String id;
   final String title;
+  final String categoryId;
   final double rating;
   final int reviews;
   final int durationMinutes;
@@ -44,11 +49,13 @@ class ServiceOfferModel {
   final String? imageUrl;
   final double imageAlignment;
   final String? badge;
+  final double? distanceKm;
   final ServiceProviderModel provider;
 
   ServiceOffer toEntity() => ServiceOffer(
     id: id,
     title: title,
+    categoryId: categoryId,
     rating: rating,
     reviews: reviews,
     durationMinutes: durationMinutes,
@@ -57,6 +64,7 @@ class ServiceOfferModel {
     imageUrl: imageUrl,
     imageAlignment: imageAlignment,
     badge: badge,
+    distanceKm: distanceKm,
     provider: provider.toEntity(),
   );
 }

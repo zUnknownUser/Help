@@ -8,6 +8,10 @@ extension AuthFailureMessage on AuthFailure {
       'Sem conexão. Verifique sua internet e tente novamente.',
     AuthFailureType.tooManyRequests =>
       'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
+    AuthFailureType.emailAlreadyInUse =>
+      'Este e-mail já possui uma conta. Entre ou recupere sua senha.',
+    AuthFailureType.weakPassword =>
+      'Crie uma senha mais segura, com pelo menos 8 caracteres.',
     AuthFailureType.cancelled => 'Entrada cancelada.',
     AuthFailureType.configuration =>
       'Este método de entrada ainda não está configurado.',

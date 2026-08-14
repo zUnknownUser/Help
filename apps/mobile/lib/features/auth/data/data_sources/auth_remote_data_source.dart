@@ -8,7 +8,15 @@ abstract interface class AuthRemoteDataSource {
     required String password,
   });
 
+  Future<AuthUserModel> signUpWithEmail({
+    required String displayName,
+    required String email,
+    required String password,
+  });
+
   Future<AuthUserModel> signInWithGoogle();
+
+  Future<AuthUserModel> refreshCurrentUser();
 
   Future<void> signOut();
 }

@@ -35,6 +35,17 @@ android {
         versionName = flutter.versionName
     }
 
+    flavorDimensions += "environment"
+    productFlavors {
+        create("local") {
+            dimension = "environment"
+            signingConfig = signingConfigs.getByName("debug")
+        }
+        create("production") {
+            dimension = "environment"
+        }
+    }
+
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {

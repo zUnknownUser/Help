@@ -18,10 +18,10 @@ func (s categoryReaderStub) ListPopular(context.Context) ([]categories.Category,
 	return s.values, nil
 }
 
-type catalogReaderStub struct{ values []catalog.Service }
+type catalogSearcherStub struct{ values []catalog.Listing }
 
-func (s catalogReaderStub) ListRecommended(context.Context) ([]catalog.Service, error) {
-	return s.values, nil
+func (s catalogSearcherStub) Search(context.Context, catalog.Filters) (catalog.Page, error) {
+	return catalog.Page{Items: s.values}, nil
 }
 
 type promotionReaderStub struct{ values []promotions.Promotion }
@@ -42,20 +42,35 @@ func (s frameReaderStub) GetFrame(context.Context) (domainhome.Frame, error) {
 	return s.value, nil
 }
 
+type viewerReaderStub struct{ value domainhome.Viewer }
+
+func (s viewerReaderStub) GetViewer(context.Context, string) (domainhome.Viewer, error) {
+	return s.value, nil
+}
+
 func TestGetHomeComposesAllModulesInOneResult(t *testing.T) {
 	t.Parallel()
 
 	service := catalog.Service{ID: "cleaning", ProviderID: "provider-1", Title: "Limpeza residencial"}
 	provider := providers.Provider{ID: "provider-1", Name: "Parceiro Help", Verified: true}
-	useCase := applicationhome.NewGetHome(
+	base := applicationhome.NewGetHomeBase(
 		categoryReaderStub{values: []categories.Category{{ID: "cleaning", Name: "Limpeza"}}},
-		catalogReaderStub{values: []catalog.Service{service}},
 		promotionReaderStub{values: []promotions.Promotion{{ID: "air-conditioning", Title: "A gente resolve rápido."}}},
-		providerReaderStub{values: map[string]providers.Provider{provider.ID: provider}},
 		frameReaderStub{value: domainhome.Frame{SearchPlaceholder: "Busque por um serviço"}},
 	)
+	latitude, longitude := -3.1, -60.0
+	useCase := applicationhome.NewGetHome(
+		base,
+		viewerReaderStub{value: domainhome.Viewer{
+			UnreadNotificationCount: 2,
+			Location:                domainhome.Location{Latitude: &latitude, Longitude: &longitude},
+		}},
+		catalogSearcherStub{values: []catalog.Listing{{
+			Service: service, ProviderName: provider.Name, ProviderVerified: provider.Verified,
+		}}},
+	)
 
-	content, err := useCase.Execute(context.Background())
+	content, err := useCase.Execute(context.Background(), "firebase-uid")
 
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -71,20 +86,21 @@ func TestGetHomeComposesAllModulesInOneResult(t *testing.T) {
 	}
 }
 
-func TestGetHomeFailsWhenServiceProviderDoesNotExist(t *testing.T) {
+func TestGetHomeDoesNotExposeGlobalServicesWithoutUserLocation(t *testing.T) {
 	t.Parallel()
 
-	useCase := applicationhome.NewGetHome(
+	base := applicationhome.NewGetHomeBase(
 		categoryReaderStub{},
-		catalogReaderStub{values: []catalog.Service{{ID: "cleaning", ProviderID: "missing"}}},
 		promotionReaderStub{},
-		providerReaderStub{values: map[string]providers.Provider{}},
 		frameReaderStub{},
 	)
+	useCase := applicationhome.NewGetHome(base, viewerReaderStub{}, catalogSearcherStub{
+		values: []catalog.Listing{{Service: catalog.Service{ID: "must-not-leak"}}},
+	})
 
-	_, err := useCase.Execute(context.Background())
+	content, err := useCase.Execute(context.Background(), "firebase-uid")
 
-	if err == nil {
-		t.Fatal("Execute() deveria falhar para provider inexistente")
+	if err != nil || len(content.Services) != 0 {
+		t.Fatalf("serviços sem localização = %+v, erro = %v", content.Services, err)
 	}
 }

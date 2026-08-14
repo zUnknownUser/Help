@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/vendlydigital/help/services/api/internal/adapters/httpapi"
+	"github.com/vendlydigital/help/services/api/internal/application/ports"
 	"github.com/vendlydigital/help/services/api/internal/domain/catalog"
 	"github.com/vendlydigital/help/services/api/internal/domain/categories"
 	domainhome "github.com/vendlydigital/help/services/api/internal/domain/home"
@@ -20,7 +21,7 @@ type homeGetterStub struct {
 	err     error
 }
 
-func (s homeGetterStub) Execute(context.Context) (domainhome.Content, error) {
+func (s homeGetterStub) Execute(context.Context, string) (domainhome.Content, error) {
 	return s.content, s.err
 }
 
@@ -29,9 +30,13 @@ func TestHomeHandlerReturnsCompleteScreenContract(t *testing.T) {
 
 	content := domainhome.Content{
 		Frame: domainhome.Frame{
-			Location:          domainhome.Location{Address: "Av. Eduardo Ribeiro, 520", AvailabilityLabel: "Serviços disponíveis na sua região"},
-			SearchPlaceholder: "Busque por um serviço ou profissional",
-			Benefits:          []domainhome.Benefit{{ID: "verified", Label: "Profissionais\nverificados", IconKey: "verified"}},
+			SearchPlaceholder:    "Busque por um serviço ou profissional",
+			CategoriesTitle:      "Serviços populares",
+			RecommendationsTitle: "Recomendados para você",
+			Benefits:             []domainhome.Benefit{{ID: "verified", Label: "Profissionais\nverificados", IconKey: "verified"}},
+		},
+		Viewer: domainhome.Viewer{
+			Location: domainhome.Location{Address: "Av. Eduardo Ribeiro, 520", AvailabilityLabel: "Casa"},
 		},
 		Promotions: []promotions.Promotion{{ID: "promo-1", Title: "A gente resolve rápido."}},
 		Categories: []categories.Category{{ID: "cleaning", Name: "Limpeza\nresidencial", IconKey: "home"}},
@@ -40,8 +45,13 @@ func TestHomeHandlerReturnsCompleteScreenContract(t *testing.T) {
 			Provider: providers.Provider{ID: "provider-1", Name: "Parceiro Help", Verified: true},
 		}},
 	}
-	handler := httpapi.NewHomeHandler(homeGetterStub{content: content})
+	handler := httpapi.NewRouter(httpapi.RouterDependencies{
+		TokenVerifier:    tokenVerifierStub{identity: ports.AuthenticatedIdentity{UID: "firebase-uid"}},
+		HomeGetter:       homeGetterStub{content: content},
+		ReadinessChecker: readinessStub{},
+	})
 	req := httptest.NewRequest(http.MethodGet, "/v1/home", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
@@ -57,7 +67,7 @@ func TestHomeHandlerReturnsCompleteScreenContract(t *testing.T) {
 	if !ok {
 		t.Fatalf("resposta sem data: %s", res.Body.String())
 	}
-	for _, field := range []string{"location", "search_placeholder", "promotions", "categories", "recommended_services", "benefits"} {
+	for _, field := range []string{"location", "search_placeholder", "categories_title", "recommendations_title", "promotions", "categories", "recommended_services", "benefits"} {
 		if _, exists := data[field]; !exists {
 			t.Errorf("campo %q ausente", field)
 		}

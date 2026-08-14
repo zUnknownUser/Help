@@ -9,6 +9,10 @@ class HomeContentModel {
   const HomeContentModel({
     required this.location,
     required this.searchPlaceholder,
+    required this.categoriesTitle,
+    required this.recommendationsTitle,
+    required this.unreadNotificationCount,
+    required this.notifications,
     required this.promotions,
     required this.categories,
     required this.recommendedServices,
@@ -16,8 +20,12 @@ class HomeContentModel {
   });
 
   const HomeContentModel.empty()
-    : location = const HomeLocationModel('', ''),
+    : location = const HomeLocationModel('', '', null, null),
       searchPlaceholder = '',
+      categoriesTitle = '',
+      recommendationsTitle = '',
+      unreadNotificationCount = 0,
+      notifications = const [],
       promotions = const [],
       categories = const [],
       recommendedServices = const [],
@@ -29,6 +37,16 @@ class HomeContentModel {
           JsonReader.map(json['location'], 'location'),
         ),
         searchPlaceholder: JsonReader.string(json, 'search_placeholder'),
+        categoriesTitle: JsonReader.string(json, 'categories_title'),
+        recommendationsTitle: JsonReader.string(json, 'recommendations_title'),
+        unreadNotificationCount: JsonReader.integer(
+          json,
+          'unread_notification_count',
+        ),
+        notifications: JsonReader.maps(
+          json['notifications'],
+          'notifications',
+        ).map(HomeNotificationModel.fromJson).toList(growable: false),
         promotions: JsonReader.maps(
           json['promotions'],
           'promotions',
@@ -49,6 +67,10 @@ class HomeContentModel {
 
   final HomeLocationModel location;
   final String searchPlaceholder;
+  final String categoriesTitle;
+  final String recommendationsTitle;
+  final int unreadNotificationCount;
+  final List<HomeNotificationModel> notifications;
   final List<PromotionModel> promotions;
   final List<ServiceCategoryModel> categories;
   final List<ServiceOfferModel> recommendedServices;
@@ -57,6 +79,12 @@ class HomeContentModel {
   HomeContent toEntity() => HomeContent(
     location: location.toEntity(),
     searchPlaceholder: searchPlaceholder,
+    categoriesTitle: categoriesTitle,
+    recommendationsTitle: recommendationsTitle,
+    unreadNotificationCount: unreadNotificationCount,
+    notifications: notifications
+        .map((value) => value.toEntity())
+        .toList(growable: false),
     promotions: promotions
         .map((value) => value.toEntity())
         .toList(growable: false),

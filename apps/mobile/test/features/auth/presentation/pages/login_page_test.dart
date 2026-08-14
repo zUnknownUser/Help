@@ -10,6 +10,7 @@ import 'package:help/features/auth/domain/use_cases/sign_in_with_email.dart';
 import 'package:help/features/auth/domain/use_cases/sign_in_with_google.dart';
 import 'package:help/features/auth/presentation/pages/login_page.dart';
 import 'package:help/features/auth/presentation/pages/password_reset_page.dart';
+import 'package:help/features/auth/presentation/pages/registration_page.dart';
 import 'package:help/features/auth/presentation/providers/auth_providers.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -78,6 +79,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(PasswordResetPage), findsOneWidget);
+  });
+
+  testWidgets('abre o cadastro de conta', (tester) async {
+    await pumpPage(tester);
+
+    final button = find.byKey(const Key('create_account_button'));
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RegistrationPage), findsOneWidget);
+    expect(find.text('Quero contratar serviços'), findsOneWidget);
+    expect(find.text('Quero oferecer serviços'), findsOneWidget);
   });
 
   testWidgets('alterna a visibilidade da senha', (tester) async {

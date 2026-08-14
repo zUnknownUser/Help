@@ -2,11 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help/features/auth/domain/entities/auth_user.dart';
+import 'package:help/features/auth/domain/failures/auth_failure.dart';
+import 'package:help/features/auth/domain/use_cases/request_email_verification.dart';
 import 'package:help/features/auth/presentation/pages/auth_gate.dart';
 import 'package:help/features/auth/presentation/providers/auth_providers.dart';
+import 'package:help/core/result/result.dart';
+import 'package:help/core/session/session_lifecycle.dart';
+import 'package:help/features/chat/presentation/providers/chat_providers.dart';
 import 'package:help/features/home/domain/entities/home_content.dart';
 import 'package:help/features/home/presentation/controllers/home_controller.dart';
 import 'package:help/features/home/presentation/providers/home_providers.dart';
+import 'package:help/features/profile/domain/entities/user_profile.dart';
+import 'package:help/features/profile/domain/entities/user_role.dart';
+import 'package:help/features/profile/presentation/controllers/profile_controller.dart';
+import 'package:help/features/profile/presentation/providers/profile_providers.dart';
+import 'package:mocktail/mocktail.dart';
 
 import '../../../home/fixtures/home_content_fixture.dart';
 
@@ -15,13 +25,39 @@ class _FixtureHomeController extends HomeController {
   Future<HomeContent> build() async => HomeContentFixture.content;
 }
 
+class _FixtureProfileController extends ProfileController {
+  _FixtureProfileController(this.profile);
+
+  final UserProfile profile;
+
+  @override
+  Future<UserProfile> build() async => profile;
+}
+
+class _MockRequestEmailVerification extends Mock
+    implements RequestEmailVerification {}
+
 void main() {
-  Future<void> pumpGate(WidgetTester tester, Stream<AuthUser?> session) async {
+  Future<void> pumpGate(
+    WidgetTester tester,
+    Stream<AuthUser?> session, {
+    UserProfile profile = const UserProfile(
+      email: 'user@email.com',
+      displayName: 'User',
+      activeRole: UserRole.customer,
+      roles: [UserRole.customer],
+    ),
+  }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           authStateProvider.overrideWith((ref) => session),
           homeControllerProvider.overrideWith(_FixtureHomeController.new),
+          currentProfileProvider.overrideWith(
+            () => _FixtureProfileController(profile),
+          ),
+          sessionStarterProvider.overrideWithValue((_) {}),
+          unreadChatCountProvider.overrideWith((ref) => Stream.value(0)),
         ],
         child: const MaterialApp(home: AuthGate()),
       ),
@@ -39,11 +75,57 @@ void main() {
   testWidgets('mostra Home quando há sessão autenticada', (tester) async {
     await pumpGate(
       tester,
-      Stream.value(const AuthUser(id: '1', email: 'user@email.com')),
+      Stream.value(
+        const AuthUser(id: '1', email: 'user@email.com', emailVerified: true),
+      ),
     );
 
     expect(find.text('Serviços populares'), findsOneWidget);
     expect(find.text('Bem-vindo ao Help'), findsNothing);
+  });
+
+  testWidgets('pede confirmação para sessão com e-mail não verificado', (
+    tester,
+  ) async {
+    final request = _MockRequestEmailVerification();
+    when(
+      request.call,
+    ).thenAnswer((_) async => const Success<void, AuthFailure>(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authStateProvider.overrideWith(
+            (ref) =>
+                Stream.value(const AuthUser(id: '1', email: 'user@email.com')),
+          ),
+          requestEmailVerificationProvider.overrideWithValue(request),
+        ],
+        child: const MaterialApp(home: AuthGate()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirme seu e-mail'), findsOneWidget);
+    verify(request.call).called(1);
+  });
+
+  testWidgets('leva prestador para sua própria jornada', (tester) async {
+    await pumpGate(
+      tester,
+      Stream.value(
+        const AuthUser(id: '1', email: 'pro@example.com', emailVerified: true),
+      ),
+      profile: const UserProfile(
+        email: 'pro@example.com',
+        displayName: 'Profissional',
+        activeRole: UserRole.provider,
+        roles: [UserRole.provider],
+        providerStatus: ProviderOnboardingStatus.pending,
+      ),
+    );
+
+    expect(find.text('Seu perfil está em análise'), findsOneWidget);
+    expect(find.text('Serviços populares'), findsNothing);
   });
 
   testWidgets('permite tentar novamente quando a sessão falha', (tester) async {

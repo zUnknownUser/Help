@@ -1,5 +1,7 @@
 enum PromotionActionStyle { primary, secondary }
 
+enum PromotionActionType { category, allServices }
+
 class Promotion {
   const Promotion({
     required this.id,
@@ -31,10 +33,14 @@ class PromotionAction {
     required this.label,
     required this.iconKey,
     required this.style,
+    required this.type,
+    this.target,
   });
 
   final String id;
   final String label;
   final String iconKey;
   final PromotionActionStyle style;
+  final PromotionActionType type;
+  final String? target;
 }

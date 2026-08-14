@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	domainhome "github.com/vendlydigital/help/services/api/internal/domain/home"
@@ -24,7 +25,8 @@ func (r *Repository) GetFrame(ctx context.Context) (domainhome.Frame, error) {
 	var frame domainhome.Frame
 	var benefitsJSON []byte
 	err := r.pool.QueryRow(ctx, `
-		SELECT c.address, c.availability_label, c.search_placeholder,
+		SELECT c.search_placeholder,
+		       COALESCE(c.categories_title, ''), COALESCE(c.recommendations_title, ''),
 		       COALESCE((
 		           SELECT jsonb_agg(jsonb_build_object('id', b.id, 'label', b.label, 'icon_key', b.icon_key) ORDER BY b.position)
 		           FROM (
@@ -37,11 +39,14 @@ func (r *Repository) GetFrame(ctx context.Context) (domainhome.Frame, error) {
 		       ), '[]'::jsonb)
 		FROM home_configuration c
 		WHERE c.id = 1`).Scan(
-		&frame.Location.Address,
-		&frame.Location.AvailabilityLabel,
 		&frame.SearchPlaceholder,
+		&frame.CategoriesTitle,
+		&frame.RecommendationsTitle,
 		&benefitsJSON,
 	)
+	if err == pgx.ErrNoRows {
+		return domainhome.Frame{}, nil
+	}
 	if err != nil {
 		return domainhome.Frame{}, fmt.Errorf("query home frame: %w", err)
 	}

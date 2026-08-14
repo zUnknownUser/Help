@@ -13,15 +13,23 @@ import (
 	firebase "firebase.google.com/go/v4"
 
 	"github.com/vendlydigital/help/services/api/internal/adapters/firebaseauth"
+	"github.com/vendlydigital/help/services/api/internal/adapters/firebasepush"
 	"github.com/vendlydigital/help/services/api/internal/adapters/httpapi"
 	"github.com/vendlydigital/help/services/api/internal/adapters/mailersend"
 	postgrescatalog "github.com/vendlydigital/help/services/api/internal/adapters/postgres/catalog"
 	postgrescategories "github.com/vendlydigital/help/services/api/internal/adapters/postgres/categories"
+	postgreschat "github.com/vendlydigital/help/services/api/internal/adapters/postgres/chat"
+	postgresdevices "github.com/vendlydigital/help/services/api/internal/adapters/postgres/devices"
 	postgreshome "github.com/vendlydigital/help/services/api/internal/adapters/postgres/home"
+	postgresnotifications "github.com/vendlydigital/help/services/api/internal/adapters/postgres/notifications"
+	postgresprofiles "github.com/vendlydigital/help/services/api/internal/adapters/postgres/profiles"
 	postgrespromotions "github.com/vendlydigital/help/services/api/internal/adapters/postgres/promotions"
-	postgresproviders "github.com/vendlydigital/help/services/api/internal/adapters/postgres/providers"
+	"github.com/vendlydigital/help/services/api/internal/adapters/realtime"
 	applicationauth "github.com/vendlydigital/help/services/api/internal/application/auth"
+	applicationchat "github.com/vendlydigital/help/services/api/internal/application/chat"
 	applicationhome "github.com/vendlydigital/help/services/api/internal/application/home"
+	applicationprofiles "github.com/vendlydigital/help/services/api/internal/application/profiles"
+	applicationpush "github.com/vendlydigital/help/services/api/internal/application/push"
 	"github.com/vendlydigital/help/services/api/internal/config"
 	"github.com/vendlydigital/help/services/api/internal/database"
 )
@@ -53,6 +61,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	firebaseMessaging, err := firebaseApp.Messaging(ctx)
+	if err != nil {
+		return err
+	}
 	pool, err := database.NewPool(ctx, cfg.Database)
 	if err != nil {
 		return err
@@ -60,6 +72,8 @@ func run() error {
 	defer pool.Close()
 
 	linkGenerator := firebaseauth.NewPasswordResetLinkGenerator(firebaseAuth)
+	verificationLinkGenerator := firebaseauth.NewEmailVerificationLinkGenerator(firebaseAuth)
+	tokenVerifier := firebaseauth.NewIDTokenVerifier(firebaseAuth)
 	mailer := mailersend.NewClient(mailersend.Config{
 		APIToken:  cfg.MailerSend.APIToken,
 		FromEmail: cfg.MailerSend.FromEmail,
@@ -67,20 +81,55 @@ func run() error {
 	})
 	requestPasswordReset := applicationauth.NewRequestPasswordReset(linkGenerator, mailer)
 	timedPasswordReset := applicationauth.NewTimeoutPasswordReset(requestPasswordReset, 12*time.Second)
-	getHome := applicationhome.NewGetHome(
+	requestEmailVerification := applicationauth.NewRequestEmailVerification(
+		verificationLinkGenerator,
+		mailer,
+	)
+	timedEmailVerification := applicationauth.NewTimeoutEmailVerification(
+		requestEmailVerification,
+		12*time.Second,
+	)
+	profileRepository := postgresprofiles.NewRepository(pool)
+	registerProfile := applicationprofiles.NewRegisterProfile(profileRepository)
+	locationRepository := postgresprofiles.NewLocationRepository(pool)
+	saveDefaultLocation := applicationprofiles.NewSaveDefaultLocation(locationRepository)
+	viewerRepository := postgreshome.NewViewerRepository(pool)
+	catalogRepository := postgrescatalog.NewRepository(pool)
+	getHomeBase := applicationhome.NewGetHomeBase(
 		postgrescategories.NewRepository(pool),
-		postgrescatalog.NewRepository(pool),
 		postgrespromotions.NewRepository(pool),
-		postgresproviders.NewRepository(pool),
 		postgreshome.NewRepository(pool),
 	)
-	cachedHome := applicationhome.NewCachedHome(getHome, 30*time.Second)
+	cachedHomeBase := applicationhome.NewCachedHomeBase(getHomeBase, 30*time.Second)
+	getHome := applicationhome.NewGetHome(cachedHomeBase, viewerRepository, catalogRepository)
+	deviceRepository := postgresdevices.NewRepository(pool)
+	pushService := applicationpush.NewService(
+		deviceRepository,
+		postgresnotifications.NewRepository(pool),
+		firebasepush.NewSender(firebaseMessaging),
+	)
+	realtimeHub := realtime.NewHub()
+	chatService := applicationchat.NewService(
+		postgreschat.NewRepository(pool), realtimeHub, pushService,
+	)
 	router := httpapi.NewRouter(httpapi.RouterDependencies{
-		PasswordResetRequester: timedPasswordReset,
-		PasswordResetLimiter:   httpapi.NewMemoryRateLimiter(5, time.Minute),
-		HomeGetter:             cachedHome,
-		ReadinessChecker:       pool,
-		TrustProxyHeaders:      cfg.TrustProxyHeaders,
+		PasswordResetRequester:     timedPasswordReset,
+		PasswordResetLimiter:       httpapi.NewMemoryRateLimiter(5, time.Minute),
+		EmailVerificationRequester: timedEmailVerification,
+		EmailVerificationLimiter:   httpapi.NewMemoryRateLimiter(3, time.Minute),
+		TokenVerifier:              tokenVerifier,
+		ProfileRegistrar:           registerProfile,
+		ProfileReader:              profileRepository,
+		DefaultLocationSaver:       saveDefaultLocation,
+		NotificationMarker:         viewerRepository,
+		HomeGetter:                 getHome,
+		CatalogSearcher:            catalogRepository,
+		DeviceRepository:           deviceRepository,
+		UserDirectory:              profileRepository,
+		ChatService:                chatService,
+		RealtimeHub:                realtimeHub,
+		ReadinessChecker:           pool,
+		TrustProxyHeaders:          cfg.TrustProxyHeaders,
 	})
 
 	server := &http.Server{

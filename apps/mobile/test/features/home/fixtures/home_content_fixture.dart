@@ -13,6 +13,10 @@ abstract final class HomeContentFixture {
       availabilityLabel: 'Serviços disponíveis na sua região',
     ),
     searchPlaceholder: 'Busque por um serviço ou profissional',
+    categoriesTitle: 'Serviços populares',
+    recommendationsTitle: 'Recomendados para você',
+    unreadNotificationCount: 0,
+    notifications: [],
     promotions: [promotion, promotion, promotion],
     categories: [
       ServiceCategory(
@@ -51,6 +55,7 @@ abstract final class HomeContentFixture {
     recommendedServices: [
       ServiceOffer(
         id: 'home-cleaning',
+        categoryId: 'home-cleaning',
         title: 'Limpeza residencial',
         rating: 4.8,
         reviews: 2300,
@@ -58,11 +63,13 @@ abstract final class HomeContentFixture {
         priceCents: 7900,
         oldPriceCents: 9900,
         imageAlignment: .18,
+        imageUrl: 'asset://assets/images/ac_technician.png',
         badge: 'Mais vendido',
         provider: provider,
       ),
       ServiceOffer(
         id: 'air-conditioning-repair',
+        categoryId: 'air-conditioning',
         title: 'Reparo de ar-condicionado',
         rating: 4.7,
         reviews: 1800,
@@ -70,10 +77,12 @@ abstract final class HomeContentFixture {
         priceCents: 5900,
         oldPriceCents: 7900,
         imageAlignment: .78,
+        imageUrl: 'asset://assets/images/ac_technician.png',
         provider: provider,
       ),
       ServiceOffer(
         id: 'electrical-maintenance',
+        categoryId: 'electrical',
         title: 'Manutenção elétrica',
         rating: 4.9,
         reviews: 940,
@@ -81,6 +90,7 @@ abstract final class HomeContentFixture {
         priceCents: 8900,
         oldPriceCents: 10900,
         imageAlignment: .52,
+        imageUrl: 'asset://assets/images/ac_technician.png',
         provider: provider,
       ),
     ],
@@ -112,6 +122,7 @@ abstract final class HomeContentFixture {
     id: 'air-conditioning',
     eyebrow: 'Seu ar não está gelando?',
     title: 'A gente resolve rápido.',
+    imageUrl: 'asset://assets/images/ac_technician.png',
     features: [
       PromotionFeature(
         iconKey: 'fast',
@@ -125,12 +136,16 @@ abstract final class HomeContentFixture {
         label: 'Serviço rápido',
         iconKey: 'fast',
         style: PromotionActionStyle.primary,
+        type: PromotionActionType.category,
+        target: 'air-conditioning',
       ),
       PromotionAction(
         id: 'schedule',
         label: 'Agendar',
         iconKey: 'calendar',
         style: PromotionActionStyle.secondary,
+        type: PromotionActionType.category,
+        target: 'air-conditioning',
       ),
     ],
   );

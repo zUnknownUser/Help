@@ -1,0 +1,2 @@
+-- Intentionally empty. Development must exercise the same user-generated data
+-- paths as production; product configuration is created by migrations.

@@ -4,9 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/design_system/components/app_brand.dart';
 import '../../../../core/design_system/components/app_button.dart';
 import '../../../../core/design_system/foundations/app_colors.dart';
-import '../../../home/presentation/pages/home_page.dart';
+import '../../../profile/presentation/pages/profile_gate.dart';
 import '../providers/auth_providers.dart';
 import 'login_page.dart';
+import 'email_verification_page.dart';
 
 class AuthGate extends ConsumerWidget {
   const AuthGate({super.key});
@@ -15,7 +16,11 @@ class AuthGate extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(authStateProvider);
     return session.when(
-      data: (user) => user == null ? const LoginPage() : const HomePage(),
+      data: (user) {
+        if (user == null) return const LoginPage();
+        if (!user.emailVerified) return EmailVerificationPage(user: user);
+        return ProfileGate(user: user);
+      },
       loading: () => const _AuthLoadingPage(),
       error: (error, stackTrace) => _AuthStartupErrorPage(
         onRetry: () => ref.invalidate(authStateProvider),

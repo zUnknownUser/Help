@@ -39,4 +39,11 @@ abstract final class JsonReader {
     if (value is String) return value;
     throw FormatException('$field must be a string');
   }
+
+  static double? optionalDecimal(Map<String, dynamic> json, String field) {
+    final value = json[field];
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    throw FormatException('$field must be a number');
+  }
 }

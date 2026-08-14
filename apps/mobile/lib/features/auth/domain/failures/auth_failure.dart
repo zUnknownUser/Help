@@ -2,6 +2,8 @@ enum AuthFailureType {
   invalidCredentials,
   network,
   tooManyRequests,
+  emailAlreadyInUse,
+  weakPassword,
   cancelled,
   configuration,
   unknown,

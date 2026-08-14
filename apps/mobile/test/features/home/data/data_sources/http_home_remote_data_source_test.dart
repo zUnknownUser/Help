@@ -40,6 +40,10 @@ const _response = {
       'availability_label': 'Serviços disponíveis',
     },
     'search_placeholder': 'Busque por um serviço',
+    'categories_title': 'Serviços populares',
+    'recommendations_title': 'Recomendados para você',
+    'unread_notification_count': 0,
+    'notifications': <Object?>[],
     'promotions': [
       {
         'id': 'promo',
@@ -56,6 +60,7 @@ const _response = {
       {
         'id': 'cleaning',
         'title': 'Limpeza residencial',
+        'category_id': 'cleaning',
         'rating': 4.8,
         'reviews': 2300,
         'duration_minutes': 150,

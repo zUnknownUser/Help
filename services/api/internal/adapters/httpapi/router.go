@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/vendlydigital/help/services/api/internal/adapters/realtime"
+	applicationchat "github.com/vendlydigital/help/services/api/internal/application/chat"
 	"github.com/vendlydigital/help/services/api/internal/application/ports"
 )
 
@@ -18,11 +20,23 @@ type ReadinessChecker interface {
 }
 
 type RouterDependencies struct {
-	PasswordResetRequester ports.PasswordResetRequester
-	PasswordResetLimiter   RequestLimiter
-	HomeGetter             ports.HomeGetter
-	ReadinessChecker       ReadinessChecker
-	TrustProxyHeaders      bool
+	PasswordResetRequester     ports.PasswordResetRequester
+	PasswordResetLimiter       RequestLimiter
+	EmailVerificationRequester ports.EmailVerificationRequester
+	EmailVerificationLimiter   RequestLimiter
+	TokenVerifier              ports.IDTokenVerifier
+	ProfileRegistrar           ports.ProfileRegistrar
+	ProfileReader              ports.ProfileReader
+	DefaultLocationSaver       ports.DefaultLocationSaver
+	NotificationMarker         ports.NotificationMarker
+	HomeGetter                 ports.HomeGetter
+	CatalogSearcher            ports.CatalogSearcher
+	DeviceRepository           ports.DeviceRepository
+	UserDirectory              ports.UserDirectory
+	ChatService                *applicationchat.Service
+	RealtimeHub                *realtime.Hub
+	ReadinessChecker           ReadinessChecker
+	TrustProxyHeaders          bool
 }
 
 func NewRouter(dependencies RouterDependencies) http.Handler {
@@ -39,8 +53,59 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 			NewPasswordResetHandler(dependencies.PasswordResetRequester),
 		),
 	)
-	mux.Handle("GET /v1/home", NewHomeHandler(dependencies.HomeGetter))
+	mux.Handle(
+		"POST /v1/auth/email-verification",
+		requireAuth(
+			dependencies.TokenVerifier,
+			rateLimitAuthenticated(
+				dependencies.EmailVerificationLimiter,
+				NewEmailVerificationHandler(dependencies.EmailVerificationRequester),
+			),
+		),
+	)
+	profileHandler := NewProfileHandler(dependencies.ProfileRegistrar, dependencies.ProfileReader)
+	mux.Handle("GET /v1/profile", requireAuth(dependencies.TokenVerifier, profileHandler))
+	mux.Handle("POST /v1/profile", requireAuth(dependencies.TokenVerifier, profileHandler))
+	mux.Handle(
+		"PUT /v1/profile/location",
+		requireAuth(dependencies.TokenVerifier, NewLocationHandler(dependencies.DefaultLocationSaver)),
+	)
+	mux.Handle(
+		"POST /v1/notifications/{id}/read",
+		requireAuth(dependencies.TokenVerifier, NewNotificationReadHandler(dependencies.NotificationMarker)),
+	)
+	mux.Handle(
+		"GET /v1/home",
+		requireAuth(dependencies.TokenVerifier, NewHomeHandler(dependencies.HomeGetter)),
+	)
+	mux.Handle(
+		"GET /v1/services",
+		requireAuth(dependencies.TokenVerifier, NewCatalogHandler(dependencies.CatalogSearcher)),
+	)
+	deviceHandler := NewDeviceHandler(dependencies.DeviceRepository)
+	mux.Handle("POST /v1/devices", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(deviceHandler.Register)))
+	mux.Handle("DELETE /v1/devices/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(deviceHandler.Disable)))
+	chatHandler := NewChatHandler(dependencies.ChatService)
+	mux.Handle("POST /v1/chat/conversations/direct", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(chatHandler.DirectConversation)))
+	mux.Handle("GET /v1/chat/conversations", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(chatHandler.Conversations)))
+	mux.Handle("GET /v1/chat/conversations/{id}/messages", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(chatHandler.Messages)))
+	mux.Handle("GET /v1/realtime", requireAuth(dependencies.TokenVerifier, NewRealtimeHandler(dependencies.RealtimeHub, dependencies.ChatService)))
+	mux.Handle("GET /v1/users", requireAuth(dependencies.TokenVerifier, NewUserHandler(dependencies.UserDirectory)))
 	return securityHeaders(mux)
+}
+
+func rateLimitAuthenticated(limiter RequestLimiter, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		identity, ok := authenticatedIdentity(r.Context())
+		if !ok || !limiter.Allow(identity.UID) {
+			w.Header().Set("Retry-After", "60")
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{
+				"message": "Muitas tentativas. Aguarde um minuto e tente novamente.",
+			})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func rateLimit(limiter RequestLimiter, trustProxyHeaders bool, next http.Handler) http.Handler {

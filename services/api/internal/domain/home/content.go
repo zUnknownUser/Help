@@ -9,6 +9,7 @@ import (
 
 type Content struct {
 	Frame      Frame
+	Viewer     Viewer
 	Promotions []promotions.Promotion
 	Categories []categories.Category
 	Services   []RecommendedService
@@ -20,14 +21,31 @@ type RecommendedService struct {
 }
 
 type Frame struct {
-	Location          Location
-	SearchPlaceholder string
-	Benefits          []Benefit
+	SearchPlaceholder    string
+	CategoriesTitle      string
+	RecommendationsTitle string
+	Benefits             []Benefit
+}
+
+type Viewer struct {
+	Location                Location
+	Notifications           []Notification
+	UnreadNotificationCount int
 }
 
 type Location struct {
 	Address           string
 	AvailabilityLabel string
+	Latitude          *float64
+	Longitude         *float64
+}
+
+type Notification struct {
+	ID        string
+	Title     string
+	Body      string
+	Read      bool
+	CreatedAt string
 }
 
 type Benefit struct {

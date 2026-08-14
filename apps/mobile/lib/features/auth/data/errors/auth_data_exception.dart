@@ -2,6 +2,8 @@ enum AuthDataErrorCode {
   invalidCredentials,
   network,
   tooManyRequests,
+  emailAlreadyInUse,
+  weakPassword,
   cancelled,
   configuration,
   unknown,

@@ -14,6 +14,7 @@ import '../widgets/login_error_banner.dart';
 import '../widgets/login_hero.dart';
 import '../widgets/login_social_section.dart';
 import 'password_reset_page.dart';
+import 'registration_page.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -142,7 +143,32 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                 ? null
                                 : () => _submitEmail(formState),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                'Ainda não tem conta?',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              TextButton(
+                                key: const Key('create_account_button'),
+                                onPressed: formState.isLoading
+                                    ? null
+                                    : () => Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) =>
+                                              const RegistrationPage(),
+                                        ),
+                                      ),
+                                child: const Text('Criar conta'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
                           LoginSocialSection(
                             isLoading: formState.isLoading,
                             onGooglePressed: ref

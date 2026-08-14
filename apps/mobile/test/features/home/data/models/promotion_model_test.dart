@@ -18,4 +18,5 @@ PromotionActionModel _action(String style) => PromotionActionModel.fromJson({
   'label': 'Agendar',
   'icon_key': 'calendar',
   'style': style,
+  'type': 'all_services',
 });

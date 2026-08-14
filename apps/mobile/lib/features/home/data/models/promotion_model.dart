@@ -60,7 +60,14 @@ class PromotionFeatureModel {
 }
 
 class PromotionActionModel {
-  const PromotionActionModel(this.id, this.label, this.iconKey, this.style);
+  const PromotionActionModel(
+    this.id,
+    this.label,
+    this.iconKey,
+    this.style,
+    this.type,
+    this.target,
+  );
 
   factory PromotionActionModel.fromJson(Map<String, dynamic> json) =>
       PromotionActionModel(
@@ -68,19 +75,35 @@ class PromotionActionModel {
         JsonReader.string(json, 'label'),
         JsonReader.string(json, 'icon_key'),
         _parseStyle(JsonReader.string(json, 'style')),
+        _parseType(JsonReader.string(json, 'type')),
+        JsonReader.optionalString(json, 'target'),
       );
 
   final String id;
   final String label;
   final String iconKey;
   final PromotionActionStyle style;
+  final PromotionActionType type;
+  final String? target;
 
-  PromotionAction toEntity() =>
-      PromotionAction(id: id, label: label, iconKey: iconKey, style: style);
+  PromotionAction toEntity() => PromotionAction(
+    id: id,
+    label: label,
+    iconKey: iconKey,
+    style: style,
+    type: type,
+    target: target,
+  );
 
   static PromotionActionStyle _parseStyle(String value) => switch (value) {
     'primary' => PromotionActionStyle.primary,
     'secondary' => PromotionActionStyle.secondary,
     _ => throw FormatException('unknown promotion action style: $value'),
+  };
+
+  static PromotionActionType _parseType(String value) => switch (value) {
+    'category' => PromotionActionType.category,
+    'all_services' => PromotionActionType.allServices,
+    _ => throw FormatException('unknown promotion action type: $value'),
   };
 }
