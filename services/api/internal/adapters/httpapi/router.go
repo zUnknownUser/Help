@@ -44,6 +44,7 @@ type RouterDependencies struct {
 	ICEConfigService           *applicationchat.ICEConfigService
 	ChatMediaService           *applicationchat.MediaService
 	RealtimeHub                *realtime.Hub
+	HelpNowService             ports.HelpNowService
 	ReadinessChecker           ReadinessChecker
 	TrustProxyHeaders          bool
 }
@@ -116,6 +117,14 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 	deviceHandler := NewDeviceHandler(dependencies.DeviceRepository)
 	mux.Handle("POST /v1/devices", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(deviceHandler.Register)))
 	mux.Handle("DELETE /v1/devices/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(deviceHandler.Disable)))
+	helpNowHandler := NewHelpNowHandler(dependencies.HelpNowService)
+	mux.Handle("POST /v1/help-now/requests", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(helpNowHandler.Create)))
+	mux.Handle("GET /v1/help-now/requests/active", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(helpNowHandler.Active)))
+	mux.Handle("POST /v1/help-now/requests/{id}/cancel", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(helpNowHandler.Cancel)))
+	mux.Handle("GET /v1/help-now/provider/availability", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(helpNowHandler.Availability)))
+	mux.Handle("PUT /v1/help-now/provider/availability", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(helpNowHandler.SetAvailability)))
+	mux.Handle("GET /v1/help-now/provider/offers", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(helpNowHandler.Offers)))
+	mux.Handle("POST /v1/help-now/provider/offers/{id}/responses", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(helpNowHandler.Respond)))
 	chatHandler := NewChatHandler(dependencies.ChatService)
 	mux.Handle("POST /v1/chat/conversations/direct", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(chatHandler.DirectConversation)))
 	mux.Handle("GET /v1/chat/conversations", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(chatHandler.Conversations)))

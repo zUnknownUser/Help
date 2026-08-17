@@ -19,6 +19,11 @@ import 'provider_service_form_page.dart';
 import '../../../service_requests/presentation/pages/service_request_details_page.dart';
 import '../../../scheduling/presentation/pages/provider_schedule_page.dart';
 import '../../../scheduling/presentation/pages/provider_agenda_page.dart';
+import '../../../help_now/domain/entities/help_now_availability.dart';
+import '../../../help_now/presentation/pages/provider_help_now_offers_page.dart';
+import '../../../help_now/presentation/providers/help_now_providers.dart';
+import '../../../help_now/presentation/widgets/provider_help_now_card.dart';
+import '../../../home/data/providers/home_data_providers.dart';
 
 class ProviderDashboardPage extends ConsumerWidget {
   const ProviderDashboardPage({required this.onTabSelected, super.key});
@@ -28,6 +33,7 @@ class ProviderDashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(providerWorkspaceControllerProvider);
+    final helpNow = ref.watch(providerHelpNowControllerProvider);
     return state.when(
       loading: _ProviderLoading.new,
       error: (_, _) => _ProviderError(
@@ -35,6 +41,7 @@ class ProviderDashboardPage extends ConsumerWidget {
       ),
       data: (workspace) => ProviderDashboardView(
         workspace: workspace,
+        helpNowCard: _helpNowCard(context, ref, helpNow),
         onRefresh: ref.read(providerWorkspaceControllerProvider.notifier).retry,
         onAvailabilityChanged: (value) => _availability(context, ref, value),
         onAlert: (alert) => _openAlert(context, ref, workspace, alert),
@@ -59,6 +66,71 @@ class ProviderDashboardPage extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Widget _helpNowCard(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<ProviderHelpNowState> state,
+  ) => state.when(
+    loading: () => const SizedBox(
+      height: 72,
+      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+    ),
+    error: (_, _) => ProviderHelpNowCard(
+      state: const ProviderHelpNowState(
+        availability: HelpNowAvailability.disabled(),
+        offers: [],
+      ),
+      onChanged: (enabled) => _setHelpNow(context, ref, enabled),
+      onOffers: () {},
+    ),
+    data: (value) => ProviderHelpNowCard(
+      state: value,
+      onChanged: (enabled) => _setHelpNow(context, ref, enabled),
+      onOffers: () => Navigator.of(context).push<void>(
+        MaterialPageRoute(builder: (_) => const ProviderHelpNowOffersPage()),
+      ),
+    ),
+  );
+
+  Future<void> _setHelpNow(
+    BuildContext context,
+    WidgetRef ref,
+    bool enabled,
+  ) async {
+    try {
+      var latitude = 0.0;
+      var longitude = 0.0;
+      if (enabled) {
+        final location = await ref
+            .read(locationResolverProvider)
+            .current(label: 'Localização para chamados');
+        latitude = location.latitude!;
+        longitude = location.longitude!;
+      } else if (ref.read(providerHelpNowControllerProvider).value
+          case final value?) {
+        latitude = value.availability.latitude;
+        longitude = value.availability.longitude;
+      }
+      await ref
+          .read(providerHelpNowControllerProvider.notifier)
+          .setAvailability(
+            enabled: enabled,
+            latitude: latitude,
+            longitude: longitude,
+          );
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Não foi possível atualizar o Help Agora. Verifique sua localização.',
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _openForm(

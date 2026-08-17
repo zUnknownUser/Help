@@ -24,6 +24,9 @@ import '../../../chat/presentation/pages/chat_page.dart';
 import '../../../calls/domain/entities/call_session.dart';
 import '../../../calls/presentation/pages/call_page.dart';
 import '../../../calls/presentation/providers/call_providers.dart';
+import '../../../help_now/presentation/pages/help_now_tracking_page.dart';
+import '../../../help_now/presentation/pages/provider_help_now_offers_page.dart';
+import '../../../help_now/presentation/providers/help_now_providers.dart';
 
 class ProfileGate extends ConsumerStatefulWidget {
   const ProfileGate({required this.user, super.key});
@@ -37,6 +40,8 @@ class ProfileGate extends ConsumerStatefulWidget {
 class _ProfileGateState extends ConsumerState<ProfileGate> {
   final _navigation = MainShellController();
   String? _activeCallRouteId;
+  bool _helpNowOfferRouteOpen = false;
+  final _seenHelpNowOfferIds = <String>{};
 
   @override
   void dispose() {
@@ -52,6 +57,20 @@ class _ProfileGateState extends ConsumerState<ProfileGate> {
     ref.listen(callSessionStateProvider, (_, next) {
       next.whenData((session) => _handleCallSession(context, ref, session));
     });
+    ref.listen(helpNowRealtimeEventProvider, (_, next) {
+      next.whenData((event) {
+        if (event.type == 'help_now.offer') {
+          ref.read(providerHelpNowControllerProvider.notifier).synchronize();
+          final offerId = event.data['offer_id'] as String? ?? '';
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) _openHelpNowOffer(context, offerId);
+          });
+          return;
+        }
+        ref.read(customerHelpNowControllerProvider.notifier).synchronize();
+        ref.read(providerHelpNowControllerProvider.notifier).synchronize();
+      });
+    });
     final state = ref.watch(currentProfileProvider);
     return state.when(
       data: (profile) => SessionLifecycle(
@@ -59,6 +78,7 @@ class _ProfileGateState extends ConsumerState<ProfileGate> {
         child: MainShell(
           key: ValueKey(profile.activeRole),
           controller: _navigation,
+          showCustomerHelpNow: profile.activeRole == UserRole.customer,
           homeBuilder: (onTabSelected) =>
               profile.activeRole == UserRole.provider
               ? ProviderHomePage(profile: profile, onTabSelected: onTabSelected)
@@ -116,6 +136,17 @@ class _ProfileGateState extends ConsumerState<ProfileGate> {
   }
 
   void _handlePush(BuildContext context, WidgetRef ref, PushEvent event) {
+    if (event.type == 'help_now_offer') {
+      ref.read(providerHelpNowControllerProvider.notifier).synchronize();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) _openHelpNowOffer(context, event.targetId);
+      });
+      return;
+    }
+    if (event.type == 'help_now_assigned' ||
+        event.type == 'help_now_no_provider') {
+      ref.read(customerHelpNowControllerProvider.notifier).synchronize();
+    }
     if (event.opened) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) _openPushTarget(context, ref, event);
@@ -134,11 +165,34 @@ class _ProfileGateState extends ConsumerState<ProfileGate> {
     );
   }
 
+  Future<void> _openHelpNowOffer(BuildContext context, String offerId) async {
+    if (offerId.isEmpty ||
+        _helpNowOfferRouteOpen ||
+        !_seenHelpNowOfferIds.add(offerId)) {
+      return;
+    }
+    _helpNowOfferRouteOpen = true;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => ProviderHelpNowOffersPage(focusOfferId: offerId),
+      ),
+    );
+    _helpNowOfferRouteOpen = false;
+  }
+
   Future<void> _openPushTarget(
     BuildContext context,
     WidgetRef ref,
     PushEvent event,
   ) async {
+    if (event.type == 'help_now_assigned' ||
+        event.type == 'help_now_no_provider') {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(builder: (_) => const HelpNowTrackingPage()),
+      );
+      return;
+    }
     if (event.type == 'service_request') {
       await Navigator.of(context).push<void>(
         MaterialPageRoute(

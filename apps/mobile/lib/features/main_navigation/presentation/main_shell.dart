@@ -5,6 +5,9 @@ import '../../chat/presentation/pages/chat_list_page.dart';
 import '../../chat/presentation/providers/chat_providers.dart';
 import '../../profile/presentation/pages/account_page.dart';
 import '../../service_requests/presentation/pages/service_requests_page.dart';
+import '../../help_now/presentation/pages/help_now_tracking_page.dart';
+import '../../help_now/presentation/providers/help_now_providers.dart';
+import '../../help_now/presentation/widgets/help_now_active_banner.dart';
 import 'main_tab.dart';
 import 'main_shell_controller.dart';
 import 'widgets/main_tab_bar.dart';
@@ -18,6 +21,7 @@ class MainShell extends ConsumerStatefulWidget {
     this.conversationsPage,
     this.accountPage,
     this.controller,
+    this.showCustomerHelpNow = false,
     super.key,
   });
 
@@ -26,6 +30,7 @@ class MainShell extends ConsumerStatefulWidget {
   final Widget? conversationsPage;
   final Widget? accountPage;
   final MainShellController? controller;
+  final bool showCustomerHelpNow;
 
   @override
   ConsumerState<MainShell> createState() => _MainShellState();
@@ -72,6 +77,9 @@ class _MainShellState extends ConsumerState<MainShell> {
   @override
   Widget build(BuildContext context) {
     final unread = ref.watch(unreadChatCountProvider).value ?? 0;
+    final activeHelpNow = widget.showCustomerHelpNow
+        ? ref.watch(customerHelpNowControllerProvider).value
+        : null;
     return PopScope(
       canPop: _selected == MainTab.home,
       onPopInvokedWithResult: (didPop, _) {
@@ -104,10 +112,24 @@ class _MainShellState extends ConsumerState<MainShell> {
             ),
           ],
         ),
-        bottomNavigationBar: MainTabBar(
-          selected: _selected,
-          chatUnreadCount: unread,
-          onSelected: _select,
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (activeHelpNow != null && activeHelpNow.active)
+              HelpNowActiveBanner(
+                request: activeHelpNow,
+                onTap: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute(
+                    builder: (_) => const HelpNowTrackingPage(),
+                  ),
+                ),
+              ),
+            MainTabBar(
+              selected: _selected,
+              chatUnreadCount: unread,
+              onSelected: _select,
+            ),
+          ],
         ),
       ),
     );

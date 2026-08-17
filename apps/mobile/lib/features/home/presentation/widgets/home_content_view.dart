@@ -13,6 +13,11 @@ import '../pages/service_discovery_page.dart';
 import '../../../profile/presentation/pages/account_page.dart';
 import '../../../main_navigation/presentation/main_tab.dart';
 import '../../../service_details/presentation/pages/service_details_page.dart';
+import '../../../help_now/presentation/pages/help_now_start_page.dart';
+import '../../../help_now/presentation/pages/help_now_tracking_page.dart';
+import '../../../help_now/presentation/providers/help_now_providers.dart';
+import '../../../help_now/presentation/widgets/help_now_card.dart';
+import '../../../help_now/domain/entities/help_now_request.dart';
 import '../providers/home_providers.dart';
 import 'benefits_strip.dart';
 import 'carousel_dots.dart';
@@ -30,6 +35,7 @@ class HomeContentView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final helpNow = ref.watch(customerHelpNowControllerProvider).value;
     final hasDynamicContent =
         content.promotions.isNotEmpty ||
         content.categories.isNotEmpty ||
@@ -58,6 +64,15 @@ class HomeContentView extends ConsumerWidget {
                       CatalogQuery(location: content.location),
                     ),
                     onAccountTap: () => _openAccount(context),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 7, 16, 7),
+                  sliver: SliverToBoxAdapter(
+                    child: HelpNowCard(
+                      request: helpNow,
+                      onTap: () => _openHelpNow(context, ref, helpNow),
+                    ),
                   ),
                 ),
                 if (content.promotions.isNotEmpty) ...[
@@ -112,6 +127,37 @@ class HomeContentView extends ConsumerWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openHelpNow(
+    BuildContext context,
+    WidgetRef ref,
+    HelpNowRequest? active,
+  ) async {
+    if (active?.active ?? false) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(builder: (_) => const HelpNowTrackingPage()),
+      );
+      return;
+    }
+    if (!content.location.hasCoordinates) {
+      await _openLocation(context, ref);
+      return;
+    }
+    if (content.categories.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nenhuma categoria disponível agora.')),
+      );
+      return;
+    }
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => HelpNowStartPage(
+          categories: content.categories,
+          location: content.location,
         ),
       ),
     );

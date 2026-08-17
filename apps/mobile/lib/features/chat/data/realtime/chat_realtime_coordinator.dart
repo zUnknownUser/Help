@@ -43,6 +43,12 @@ class PresenceEvent {
   final DateTime? lastSeenAt;
 }
 
+class RealtimeAppEvent {
+  const RealtimeAppEvent({required this.type, required this.data});
+  final String type;
+  final Map<String, dynamic> data;
+}
+
 class ChatRealtimeCoordinator implements CallSignalingGateway {
   ChatRealtimeCoordinator({
     required this._local,
@@ -59,6 +65,7 @@ class ChatRealtimeCoordinator implements CallSignalingGateway {
   final _typing = StreamController<TypingEvent>.broadcast();
   final _presence = StreamController<PresenceEvent>.broadcast();
   final _calls = StreamController<CallSignal>.broadcast();
+  final _appEvents = StreamController<RealtimeAppEvent>.broadcast();
   final _ackTimers = <String, Timer>{};
   Timer? _outboxTimer;
   Timer? _mutationTimer;
@@ -78,6 +85,7 @@ class ChatRealtimeCoordinator implements CallSignalingGateway {
   Stream<RealtimeConnectionStatus> get connectionStatus => _connection.stream;
   Stream<TypingEvent> get typingEvents => _typing.stream;
   Stream<PresenceEvent> get presenceEvents => _presence.stream;
+  Stream<RealtimeAppEvent> get appEvents => _appEvents.stream;
   @override
   Stream<CallSignal> get callEvents => _calls.stream;
   @override
@@ -688,6 +696,8 @@ class ChatRealtimeCoordinator implements CallSignalingGateway {
       default:
         if (ChatEventTypes.callEvents.contains(type)) {
           _calls.add(CallSignal.fromWire(type, data));
+        } else if (type.startsWith('help_now.')) {
+          _appEvents.add(RealtimeAppEvent(type: type, data: data));
         }
     }
   }

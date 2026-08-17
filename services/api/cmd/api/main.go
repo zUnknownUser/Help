@@ -21,6 +21,7 @@ import (
 	postgrescategories "github.com/vendlydigital/help/services/api/internal/adapters/postgres/categories"
 	postgreschat "github.com/vendlydigital/help/services/api/internal/adapters/postgres/chat"
 	postgresdevices "github.com/vendlydigital/help/services/api/internal/adapters/postgres/devices"
+	postgreshelpnow "github.com/vendlydigital/help/services/api/internal/adapters/postgres/helpnow"
 	postgreshome "github.com/vendlydigital/help/services/api/internal/adapters/postgres/home"
 	postgresnotifications "github.com/vendlydigital/help/services/api/internal/adapters/postgres/notifications"
 	postgresprofiles "github.com/vendlydigital/help/services/api/internal/adapters/postgres/profiles"
@@ -32,6 +33,7 @@ import (
 	applicationauth "github.com/vendlydigital/help/services/api/internal/application/auth"
 	applicationcatalog "github.com/vendlydigital/help/services/api/internal/application/catalog"
 	applicationchat "github.com/vendlydigital/help/services/api/internal/application/chat"
+	applicationhelpnow "github.com/vendlydigital/help/services/api/internal/application/helpnow"
 	applicationhome "github.com/vendlydigital/help/services/api/internal/application/home"
 	applicationprofiles "github.com/vendlydigital/help/services/api/internal/application/profiles"
 	applicationprovider "github.com/vendlydigital/help/services/api/internal/application/providerworkspace"
@@ -129,6 +131,10 @@ func run() error {
 	reminderScheduler := applicationpush.NewReminderScheduler(notificationRepository, time.Minute, time.Now)
 	go reminderScheduler.Run(ctx)
 	realtimeHub := realtime.NewHub()
+	helpNowRepository := postgreshelpnow.NewRepository(pool)
+	helpNowService := applicationhelpnow.NewService(helpNowRepository, realtimeHub, time.Now)
+	helpNowDispatcher := applicationhelpnow.NewDispatcher(helpNowRepository, realtimeHub, 3*time.Second, time.Now)
+	go helpNowDispatcher.Run(ctx)
 	chatService := applicationchat.NewService(
 		postgreschat.NewRepository(pool), realtimeHub, pushService,
 	)
@@ -168,6 +174,7 @@ func run() error {
 		ICEConfigService:           iceConfigService,
 		ChatMediaService:           chatMediaService,
 		RealtimeHub:                realtimeHub,
+		HelpNowService:             helpNowService,
 		ReadinessChecker:           pool,
 		TrustProxyHeaders:          cfg.TrustProxyHeaders,
 	})

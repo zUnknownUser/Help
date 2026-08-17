@@ -122,9 +122,13 @@ class PushRegistrationService {
 
   void _emit(RemoteMessage message, {required bool opened}) {
     final type = message.data['type'] ?? '';
-    final targetId = type == 'chat' || type == 'chat_request'
-        ? message.data['conversation_id'] ?? ''
-        : message.data['request_id'] ?? '';
+    final targetId = switch (type) {
+      'chat' || 'chat_request' => message.data['conversation_id'] ?? '',
+      'help_now_offer' => message.data['help_now_offer_id'] ?? '',
+      'help_now_assigned' ||
+      'help_now_no_provider' => message.data['help_now_request_id'] ?? '',
+      _ => message.data['request_id'] ?? '',
+    };
     if (targetId.isEmpty) return;
     _events.add(
       PushEvent(

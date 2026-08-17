@@ -92,6 +92,28 @@ void main() {
     await gateway.close();
   });
 
+  test('routes a Help Agora offer to the provider offer target', () async {
+    final gateway = _MessagingGateway(AuthorizationStatus.authorized);
+    final service = PushRegistrationService(
+      messaging: gateway,
+      api: _Registrar(),
+      installationId: () async => 'installation-1',
+      supportedPlatform: true,
+    );
+    final event = service.events.first;
+
+    await service.start();
+    gateway.foreground.add(
+      const RemoteMessage(
+        data: {'type': 'help_now_offer', 'help_now_offer_id': 'offer-1'},
+      ),
+    );
+
+    expect((await event).targetId, 'offer-1');
+    await service.unregister();
+    await gateway.close();
+  });
+
   test('does not hold logout when device unregister is unavailable', () async {
     final gateway = _MessagingGateway(AuthorizationStatus.authorized);
     final registrar = _Registrar()..hangDisable = true;

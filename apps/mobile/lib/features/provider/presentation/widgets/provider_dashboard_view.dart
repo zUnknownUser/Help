@@ -27,6 +27,7 @@ class ProviderDashboardView extends StatelessWidget {
     required this.onAgenda,
     this.onRequests,
     this.onRequest,
+    this.helpNowCard,
     super.key,
   });
 
@@ -44,6 +45,7 @@ class ProviderDashboardView extends StatelessWidget {
   final VoidCallback onAgenda;
   final VoidCallback? onRequests;
   final ValueChanged<ProviderRequest>? onRequest;
+  final Widget? helpNowCard;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -89,6 +91,10 @@ class ProviderDashboardView extends StatelessWidget {
                   workspace: workspace,
                   onAvailabilityChanged: onAvailabilityChanged,
                 ),
+                if (helpNowCard case final card?) ...[
+                  const SizedBox(height: 12),
+                  card,
+                ],
                 if (workspace.alerts.isNotEmpty) ...[
                   const SizedBox(height: 14),
                   ...workspace.alerts.map(

@@ -46,6 +46,7 @@ app.*.map.json
 **/.dart_tool/
 **/build/
 **/coverage/
+**/test/failures/
 **/.gocache/
 **/.tmp/
 .go-tmp/
