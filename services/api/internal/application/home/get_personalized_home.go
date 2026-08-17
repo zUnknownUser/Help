@@ -7,19 +7,19 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/vendlydigital/help/services/api/internal/application/ports"
-	"github.com/vendlydigital/help/services/api/internal/domain/catalog"
 	domainhome "github.com/vendlydigital/help/services/api/internal/domain/home"
+	domainmatch "github.com/vendlydigital/help/services/api/internal/domain/matchmaking"
 	"github.com/vendlydigital/help/services/api/internal/domain/providers"
 )
 
 type GetHome struct {
 	base    ports.HomeBaseGetter
 	viewer  ports.HomeViewerReader
-	catalog ports.CatalogSearcher
+	matcher ports.Matchmaker
 }
 
-func NewGetHome(base ports.HomeBaseGetter, viewer ports.HomeViewerReader, catalog ports.CatalogSearcher) *GetHome {
-	return &GetHome{base: base, viewer: viewer, catalog: catalog}
+func NewGetHome(base ports.HomeBaseGetter, viewer ports.HomeViewerReader, matcher ports.Matchmaker) *GetHome {
+	return &GetHome{base: base, viewer: viewer, matcher: matcher}
 }
 
 func (useCase *GetHome) Execute(
@@ -48,19 +48,21 @@ func (useCase *GetHome) Execute(
 	}
 	content.Viewer = viewer
 	if viewer.Location.Latitude != nil && viewer.Location.Longitude != nil {
-		radius := 30.0
-		page, err := useCase.catalog.Search(ctx, catalog.Filters{
-			Latitude: viewer.Location.Latitude, Longitude: viewer.Location.Longitude,
-			RadiusKM: &radius, Sort: "distance", Limit: 12,
+		result, err := useCase.matcher.Recommend(ctx, domainmatch.Request{
+			ViewerUID: uid, Latitude: *viewer.Location.Latitude, Longitude: *viewer.Location.Longitude,
+			RadiusKM: 30, Limit: 12,
 		})
 		if err != nil {
-			return domainhome.Content{}, fmt.Errorf("load nearby services: %w", err)
+			return domainhome.Content{}, fmt.Errorf("load matched services: %w", err)
 		}
-		content.Services = make([]domainhome.RecommendedService, 0, len(page.Items))
-		for _, item := range page.Items {
+		content.MatchRunID = result.RunID
+		content.Services = make([]domainhome.RecommendedService, 0, len(result.Matches))
+		for _, match := range result.Matches {
+			item := match.Listing
 			content.Services = append(content.Services, domainhome.RecommendedService{
-				Service:  item.Service,
-				Provider: providers.Provider{ID: item.Service.ProviderID, Name: item.ProviderName, Verified: item.ProviderVerified},
+				Service:      item.Service,
+				Provider:     providers.Provider{ID: item.Service.ProviderID, Name: item.ProviderName, Verified: item.ProviderVerified},
+				MatchReasons: match.Reasons,
 			})
 		}
 	}

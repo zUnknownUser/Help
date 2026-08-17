@@ -17,12 +17,14 @@ import (
 	"github.com/vendlydigital/help/services/api/internal/adapters/httpapi"
 	"github.com/vendlydigital/help/services/api/internal/adapters/localmedia"
 	"github.com/vendlydigital/help/services/api/internal/adapters/mailersend"
+	"github.com/vendlydigital/help/services/api/internal/adapters/openaiembeddings"
 	postgrescatalog "github.com/vendlydigital/help/services/api/internal/adapters/postgres/catalog"
 	postgrescategories "github.com/vendlydigital/help/services/api/internal/adapters/postgres/categories"
 	postgreschat "github.com/vendlydigital/help/services/api/internal/adapters/postgres/chat"
 	postgresdevices "github.com/vendlydigital/help/services/api/internal/adapters/postgres/devices"
 	postgreshelpnow "github.com/vendlydigital/help/services/api/internal/adapters/postgres/helpnow"
 	postgreshome "github.com/vendlydigital/help/services/api/internal/adapters/postgres/home"
+	postgresmatchmaking "github.com/vendlydigital/help/services/api/internal/adapters/postgres/matchmaking"
 	postgresnotifications "github.com/vendlydigital/help/services/api/internal/adapters/postgres/notifications"
 	postgresprofiles "github.com/vendlydigital/help/services/api/internal/adapters/postgres/profiles"
 	postgrespromotions "github.com/vendlydigital/help/services/api/internal/adapters/postgres/promotions"
@@ -36,6 +38,8 @@ import (
 	applicationchat "github.com/vendlydigital/help/services/api/internal/application/chat"
 	applicationhelpnow "github.com/vendlydigital/help/services/api/internal/application/helpnow"
 	applicationhome "github.com/vendlydigital/help/services/api/internal/application/home"
+	applicationmatchmaking "github.com/vendlydigital/help/services/api/internal/application/matchmaking"
+	"github.com/vendlydigital/help/services/api/internal/application/ports"
 	applicationprofiles "github.com/vendlydigital/help/services/api/internal/application/profiles"
 	applicationprovider "github.com/vendlydigital/help/services/api/internal/application/providerworkspace"
 	applicationpush "github.com/vendlydigital/help/services/api/internal/application/push"
@@ -125,7 +129,16 @@ func run() error {
 		postgreshome.NewRepository(pool),
 	)
 	cachedHomeBase := applicationhome.NewCachedHomeBase(getHomeBase, 30*time.Second)
-	getHome := applicationhome.NewGetHome(cachedHomeBase, viewerRepository, catalogRepository)
+	matchRepository := postgresmatchmaking.NewRepository(pool)
+	var semanticScorer ports.SemanticScorer
+	if cfg.OpenAI.Enabled {
+		semanticScorer = openaiembeddings.NewClient(openaiembeddings.Config{
+			APIKey: cfg.OpenAI.APIKey, BaseURL: cfg.OpenAI.BaseURL,
+			Model: cfg.OpenAI.EmbeddingModel, Timeout: cfg.OpenAI.Timeout,
+		})
+	}
+	matchService := applicationmatchmaking.NewService(matchRepository, matchRepository, matchRepository, semanticScorer, time.Now)
+	getHome := applicationhome.NewGetHome(cachedHomeBase, viewerRepository, matchService)
 	deviceRepository := postgresdevices.NewRepository(pool)
 	notificationRepository := postgresnotifications.NewRepository(pool)
 	pushSender := firebasepush.NewSender(firebaseMessaging)

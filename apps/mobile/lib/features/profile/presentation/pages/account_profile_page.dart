@@ -97,7 +97,9 @@ class _AccountProfilePageState extends ConsumerState<AccountProfilePage> {
             const SizedBox(height: 12),
             AppTextField(
               controller: _phone,
-              label: 'Telefone (opcional)',
+              label: 'Telefone',
+              helperText:
+                  'Para contato sobre atendimentos. Você pode informar depois.',
               keyboardType: TextInputType.phone,
               textInputAction: TextInputAction.next,
               validator: _validatePhone,

@@ -1,6 +1,7 @@
 import '../../domain/entities/service_offer.dart';
 import '../../domain/entities/service_provider.dart';
 import 'json_reader.dart';
+import 'match_reason_model.dart';
 
 class ServiceOfferModel {
   const ServiceOfferModel({
@@ -17,6 +18,7 @@ class ServiceOfferModel {
     this.imageUrl,
     this.badge,
     this.distanceKm,
+    this.matchReasons = const [],
   });
 
   factory ServiceOfferModel.fromJson(Map<String, dynamic> json) =>
@@ -38,6 +40,10 @@ class ServiceOfferModel {
         provider: ServiceProviderModel.fromJson(
           JsonReader.map(json['provider'], 'provider'),
         ),
+        matchReasons: JsonReader.maps(
+          json['match_reasons'] ?? const <dynamic>[],
+          'match_reasons',
+        ).map(MatchReasonModel.fromJson).toList(growable: false),
       );
 
   final String id;
@@ -53,6 +59,7 @@ class ServiceOfferModel {
   final String? badge;
   final double? distanceKm;
   final ServiceProviderModel provider;
+  final List<MatchReasonModel> matchReasons;
 
   ServiceOffer toEntity() => ServiceOffer(
     id: id,
@@ -68,6 +75,9 @@ class ServiceOfferModel {
     badge: badge,
     distanceKm: distanceKm,
     provider: provider.toEntity(),
+    matchReasons: matchReasons
+        .map((reason) => reason.toEntity())
+        .toList(growable: false),
   );
 }
 

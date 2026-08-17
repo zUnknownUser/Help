@@ -15,6 +15,15 @@ type Config struct {
 	Database           DatabaseConfig
 	RTC                RTCConfig
 	ChatMediaDirectory string
+	OpenAI             OpenAIConfig
+}
+
+type OpenAIConfig struct {
+	Enabled        bool
+	APIKey         string
+	BaseURL        string
+	EmbeddingModel string
+	Timeout        time.Duration
 }
 
 type RTCConfig struct {
@@ -60,6 +69,14 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	openAIEnabled, err := readBool("MATCHMAKING_AI_ENABLED", false)
+	if err != nil {
+		return Config{}, err
+	}
+	openAITimeoutSeconds, err := readInt("OPENAI_TIMEOUT_SECONDS", 5, 1, 30)
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		Port:              port,
@@ -82,6 +99,12 @@ func Load() (Config, error) {
 			CredentialTTL: time.Duration(turnTTLSeconds) * time.Second,
 		},
 		ChatMediaDirectory: valueOrDefault("CHAT_MEDIA_DIR", ".data/chat-media"),
+		OpenAI: OpenAIConfig{
+			Enabled: openAIEnabled, APIKey: strings.TrimSpace(os.Getenv("OPENAI_API_KEY")),
+			BaseURL:        valueOrDefault("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+			EmbeddingModel: valueOrDefault("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
+			Timeout:        time.Duration(openAITimeoutSeconds) * time.Second,
+		},
 	}
 	if cfg.FirebaseProjectID == "" {
 		return Config{}, errors.New("FIREBASE_PROJECT_ID is required")
@@ -97,6 +120,9 @@ func Load() (Config, error) {
 	}
 	if len(cfg.RTC.TURNURLs) > 0 && cfg.RTC.TURNSecret == "" {
 		return Config{}, errors.New("TURN_SHARED_SECRET is required when TURN_URLS is configured")
+	}
+	if cfg.OpenAI.Enabled && cfg.OpenAI.APIKey == "" {
+		return Config{}, errors.New("OPENAI_API_KEY is required when MATCHMAKING_AI_ENABLED is true")
 	}
 	return cfg, nil
 }

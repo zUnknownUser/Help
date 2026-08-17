@@ -3,6 +3,7 @@ package home
 import (
 	"github.com/vendlydigital/help/services/api/internal/domain/catalog"
 	"github.com/vendlydigital/help/services/api/internal/domain/categories"
+	"github.com/vendlydigital/help/services/api/internal/domain/matchmaking"
 	"github.com/vendlydigital/help/services/api/internal/domain/promotions"
 	"github.com/vendlydigital/help/services/api/internal/domain/providers"
 )
@@ -13,11 +14,13 @@ type Content struct {
 	Promotions []promotions.Promotion
 	Categories []categories.Category
 	Services   []RecommendedService
+	MatchRunID string
 }
 
 type RecommendedService struct {
-	Service  catalog.Service
-	Provider providers.Provider
+	Service      catalog.Service
+	Provider     providers.Provider
+	MatchReasons []matchmaking.Reason
 }
 
 type Frame struct {

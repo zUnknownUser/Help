@@ -8,6 +8,7 @@ import (
 	"github.com/vendlydigital/help/services/api/internal/domain/catalog"
 	"github.com/vendlydigital/help/services/api/internal/domain/categories"
 	domainhome "github.com/vendlydigital/help/services/api/internal/domain/home"
+	"github.com/vendlydigital/help/services/api/internal/domain/matchmaking"
 	"github.com/vendlydigital/help/services/api/internal/domain/promotions"
 	"github.com/vendlydigital/help/services/api/internal/domain/providers"
 )
@@ -18,10 +19,14 @@ func (s categoryReaderStub) ListPopular(context.Context) ([]categories.Category,
 	return s.values, nil
 }
 
-type catalogSearcherStub struct{ values []catalog.Listing }
+type matchmakerStub struct{ values []catalog.Listing }
 
-func (s catalogSearcherStub) Search(context.Context, catalog.Filters) (catalog.Page, error) {
-	return catalog.Page{Items: s.values}, nil
+func (s matchmakerStub) Recommend(context.Context, matchmaking.Request) (matchmaking.Result, error) {
+	matches := make([]matchmaking.Match, 0, len(s.values))
+	for _, item := range s.values {
+		matches = append(matches, matchmaking.Match{Listing: item})
+	}
+	return matchmaking.Result{RunID: "run-id", Matches: matches}, nil
 }
 
 type promotionReaderStub struct{ values []promotions.Promotion }
@@ -65,7 +70,7 @@ func TestGetHomeComposesAllModulesInOneResult(t *testing.T) {
 			UnreadNotificationCount: 2,
 			Location:                domainhome.Location{Latitude: &latitude, Longitude: &longitude},
 		}},
-		catalogSearcherStub{values: []catalog.Listing{{
+		matchmakerStub{values: []catalog.Listing{{
 			Service: service, ProviderName: provider.Name, ProviderVerified: provider.Verified,
 		}}},
 	)
@@ -94,7 +99,7 @@ func TestGetHomeDoesNotExposeGlobalServicesWithoutUserLocation(t *testing.T) {
 		promotionReaderStub{},
 		frameReaderStub{},
 	)
-	useCase := applicationhome.NewGetHome(base, viewerReaderStub{}, catalogSearcherStub{
+	useCase := applicationhome.NewGetHome(base, viewerReaderStub{}, matchmakerStub{
 		values: []catalog.Listing{{Service: catalog.Service{ID: "must-not-leak"}}},
 	})
 

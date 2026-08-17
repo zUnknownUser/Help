@@ -25,10 +25,42 @@ class ServiceCardDetails extends StatelessWidget {
           const SizedBox(height: 5),
           _Metadata(offer: offer),
           const SizedBox(height: 7),
+          if (offer.matchReasons case [final reason, ...]) ...[
+            _MatchReason(label: reason.label),
+            const SizedBox(height: 5),
+          ],
           if (offer.provider.verified) const _VerifiedProvider(),
           const Spacer(),
           _PriceRow(offer: offer),
         ],
+      ),
+    );
+  }
+}
+
+class _MatchReason extends StatelessWidget {
+  const _MatchReason({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: double.infinity),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.primarySoft,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.primaryDark,
+          fontSize: 8,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

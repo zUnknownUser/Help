@@ -17,6 +17,7 @@ type homeData struct {
 	Categories              []homeCategory     `json:"categories"`
 	RecommendedServices     []homeService      `json:"recommended_services"`
 	Benefits                []homeBenefit      `json:"benefits"`
+	MatchRunID              string             `json:"match_run_id,omitempty"`
 }
 
 type homeLocation struct {
@@ -66,19 +67,25 @@ type homeNotification struct {
 }
 
 type homeService struct {
-	ID              string       `json:"id"`
-	Title           string       `json:"title"`
-	Rating          float64      `json:"rating"`
-	Reviews         int          `json:"reviews"`
-	DurationMinutes int          `json:"duration_minutes"`
-	PriceCents      int          `json:"price_cents"`
-	OldPriceCents   *int         `json:"old_price_cents,omitempty"`
-	ImageURL        string       `json:"image_url,omitempty"`
-	ImageAlignment  float64      `json:"image_alignment"`
-	Badge           string       `json:"badge,omitempty"`
-	Provider        homeProvider `json:"provider"`
-	CategoryID      string       `json:"category_id"`
-	DistanceKM      *float64     `json:"distance_km,omitempty"`
+	ID              string        `json:"id"`
+	Title           string        `json:"title"`
+	Rating          float64       `json:"rating"`
+	Reviews         int           `json:"reviews"`
+	DurationMinutes int           `json:"duration_minutes"`
+	PriceCents      int           `json:"price_cents"`
+	OldPriceCents   *int          `json:"old_price_cents,omitempty"`
+	ImageURL        string        `json:"image_url,omitempty"`
+	ImageAlignment  float64       `json:"image_alignment"`
+	Badge           string        `json:"badge,omitempty"`
+	Provider        homeProvider  `json:"provider"`
+	CategoryID      string        `json:"category_id"`
+	DistanceKM      *float64      `json:"distance_km,omitempty"`
+	MatchReasons    []matchReason `json:"match_reasons,omitempty"`
+}
+
+type matchReason struct {
+	Code  string `json:"code"`
+	Label string `json:"label"`
 }
 
 type homeProvider struct {
@@ -108,6 +115,7 @@ func newHomeResponse(content domainhome.Content) homeEnvelope {
 		Categories:              make([]homeCategory, 0, len(content.Categories)),
 		RecommendedServices:     make([]homeService, 0, len(content.Services)),
 		Benefits:                make([]homeBenefit, 0, len(content.Frame.Benefits)),
+		MatchRunID:              content.MatchRunID,
 	}
 	for _, promotion := range content.Promotions {
 		item := homePromotion{
@@ -132,14 +140,19 @@ func newHomeResponse(content domainhome.Content) homeEnvelope {
 	}
 	for _, recommendation := range content.Services {
 		service, provider := recommendation.Service, recommendation.Provider
-		data.RecommendedServices = append(data.RecommendedServices, homeService{
+		item := homeService{
 			ID: service.ID, Title: service.Title, Rating: service.Rating, Reviews: service.Reviews,
 			DurationMinutes: service.DurationMinutes, PriceCents: service.PriceCents,
 			OldPriceCents: service.OldPriceCents, ImageURL: service.ImageURL,
 			ImageAlignment: service.ImageAlignment, Badge: service.Badge,
-			CategoryID: service.CategoryID,
-			Provider:   homeProvider{ID: provider.ID, Name: provider.Name, Verified: provider.Verified},
-		})
+			CategoryID: service.CategoryID, DistanceKM: service.DistanceKM,
+			Provider:     homeProvider{ID: provider.ID, Name: provider.Name, Verified: provider.Verified},
+			MatchReasons: make([]matchReason, 0, len(recommendation.MatchReasons)),
+		}
+		for _, reason := range recommendation.MatchReasons {
+			item.MatchReasons = append(item.MatchReasons, matchReason{Code: reason.Code, Label: reason.Label})
+		}
+		data.RecommendedServices = append(data.RecommendedServices, item)
 	}
 	for _, benefit := range content.Frame.Benefits {
 		data.Benefits = append(data.Benefits, homeBenefit{ID: benefit.ID, Label: benefit.Label, IconKey: benefit.IconKey})

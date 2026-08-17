@@ -34,4 +34,24 @@ void main() {
 
     expect(offer.oldPriceCents, isNull);
   });
+
+  test('converte explicações do matchmaking', () {
+    final offer = ServiceOfferModel.fromJson({
+      'id': 'service-3',
+      'title': 'Elétrica',
+      'category_id': 'electrical',
+      'rating': 4.8,
+      'reviews': 12,
+      'duration_minutes': 60,
+      'price_cents': 12000,
+      'old_price_cents': null,
+      'image_alignment': 0,
+      'provider': {'id': 'provider-1', 'name': 'Luis', 'verified': true},
+      'match_reasons': [
+        {'code': 'nearby', 'label': 'Perto de você'},
+      ],
+    }).toEntity();
+
+    expect(offer.matchReasons.single.code, 'nearby');
+  });
 }

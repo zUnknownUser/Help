@@ -1,4 +1,5 @@
 import 'service_provider.dart';
+import 'match_reason.dart';
 
 class ServiceOffer {
   const ServiceOffer({
@@ -15,6 +16,7 @@ class ServiceOffer {
     this.imageUrl,
     this.badge,
     this.distanceKm,
+    this.matchReasons = const [],
   });
 
   final String id;
@@ -30,4 +32,5 @@ class ServiceOffer {
   final String? imageUrl;
   final String? badge;
   final double? distanceKm;
+  final List<MatchReason> matchReasons;
 }

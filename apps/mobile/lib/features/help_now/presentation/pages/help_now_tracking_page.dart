@@ -7,6 +7,7 @@ import '../../../../core/design_system/foundations/app_colors.dart';
 import '../../../service_requests/presentation/pages/service_request_details_page.dart';
 import '../../domain/entities/help_now_request.dart';
 import '../providers/help_now_providers.dart';
+import '../widgets/help_now_status_visual.dart';
 
 class HelpNowTrackingPage extends ConsumerWidget {
   const HelpNowTrackingPage({super.key});
@@ -54,7 +55,7 @@ class _TrackingContent extends StatelessWidget {
           child: Column(
             children: [
               const Spacer(),
-              _StatusVisual(status: request.status),
+              HelpNowStatusVisual(status: request.status),
               const SizedBox(height: 28),
               Text(
                 _title(request.status),
@@ -147,32 +148,6 @@ String _description(HelpNowRequest request) => switch (request.status) {
   HelpNowStatus.searching =>
     'Estamos consultando profissionais disponíveis próximos ao local do atendimento.',
 };
-
-class _StatusVisual extends StatelessWidget {
-  const _StatusVisual({required this.status});
-  final HelpNowStatus status;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: 112,
-    height: 112,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      color: AppColors.primarySoft,
-      border: Border.all(color: const Color(0xFFCFE7D6), width: 8),
-    ),
-    child: Icon(
-      switch (status) {
-        HelpNowStatus.assigned => Icons.check_rounded,
-        HelpNowStatus.searching => Icons.radar_rounded,
-        HelpNowStatus.noProvider => Icons.person_search_rounded,
-        HelpNowStatus.cancelled => Icons.close_rounded,
-      },
-      size: 47,
-      color: AppColors.primary,
-    ),
-  );
-}
 
 class _RequestSummary extends StatelessWidget {
   const _RequestSummary({required this.request});
