@@ -14,6 +14,8 @@ class ProfileController extends AsyncNotifier<UserProfile> {
     if (ref.mounted) state = next;
   }
 
+  void replace(UserProfile profile) => state = AsyncData(profile);
+
   Future<UserProfile> _load() async {
     final result = await ref.read(getCurrentProfileProvider)();
     return result.fold(

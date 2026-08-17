@@ -24,7 +24,9 @@ func (repository *Repository) ListConversations(
 		cursorTime, cursorID = &cursor.UpdatedAt, &cursor.ID
 	}
 	rows, err := repository.pool.Query(ctx, `
-		SELECT c.id::text, other.firebase_uid, profile.display_name, profile.last_seen_at,
+		SELECT c.id::text, other.firebase_uid, profile.display_name,
+		       CASE WHEN profile.last_seen_visibility='nobody' THEN NULL ELSE profile.last_seen_at END,
+		       profile.show_online,
 		       c.status, c.requested_by = $1,
 		       member.last_read_sequence, c.last_sequence,
 		       (SELECT count(*) FROM chat_messages unread
@@ -106,7 +108,8 @@ func scanConversation(row rowScanner) (domainchat.Conversation, error) {
 	var version *int
 	err := row.Scan(
 		&conversation.ID, &conversation.OtherUserID, &conversation.OtherDisplayName,
-		&conversation.OtherLastSeenAt, &conversation.Status, &conversation.RequestedByMe,
+		&conversation.OtherLastSeenAt, &conversation.OtherCanShowOnline,
+		&conversation.Status, &conversation.RequestedByMe,
 		&conversation.LastReadSequence, &conversation.LastMessageSequence,
 		&conversation.UnreadCount, &conversation.UpdatedAt,
 		&messageID, &clientID, &senderID, &content, &kind,

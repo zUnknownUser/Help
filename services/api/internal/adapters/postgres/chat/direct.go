@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/vendlydigital/help/services/api/internal/database"
 	domainchat "github.com/vendlydigital/help/services/api/internal/domain/chat"
 )
 
@@ -79,7 +80,9 @@ func (repository *Repository) DecideConversation(
 	var lastSeenAt *time.Time
 	err = tx.QueryRow(ctx, `
 		SELECT c.id::text, c.status, c.requested_by, c.updated_at,
-		       other.firebase_uid, profile.display_name, profile.last_seen_at
+		       other.firebase_uid, profile.display_name,
+		       CASE WHEN profile.last_seen_visibility='nobody' THEN NULL ELSE profile.last_seen_at END,
+		       profile.show_online
 		FROM conversations c
 		JOIN conversation_members member
 		  ON member.conversation_id = c.id AND member.firebase_uid = $2
@@ -91,6 +94,7 @@ func (repository *Repository) DecideConversation(
 	).Scan(
 		&conversation.ID, &conversation.Status, &requestedBy, &conversation.UpdatedAt,
 		&conversation.OtherUserID, &conversation.OtherDisplayName, &lastSeenAt,
+		&conversation.OtherCanShowOnline,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domainchat.Conversation{}, nil, false, domainchat.ErrForbidden
@@ -170,9 +174,10 @@ func hydrateDirectRecipient(
 	conversation.OtherUserID = otherUserID
 	conversation.RequestedByMe = requestedBy == userID
 	var lastSeenAt *time.Time
-	if err := tx.QueryRow(ctx, `SELECT display_name, last_seen_at
+	if err := tx.QueryRow(ctx, `SELECT display_name,
+		CASE WHEN last_seen_visibility='nobody' THEN NULL ELSE last_seen_at END, show_online
 		FROM user_profiles WHERE firebase_uid = $1`, otherUserID,
-	).Scan(&conversation.OtherDisplayName, &lastSeenAt); err != nil {
+	).Scan(&conversation.OtherDisplayName, &lastSeenAt, &conversation.OtherCanShowOnline); err != nil {
 		return fmt.Errorf("read direct recipient: %w", err)
 	}
 	if conversation.Status == domainchat.ConversationAccepted {
@@ -187,26 +192,31 @@ func authorizeDirect(
 	key, userID, otherUserID string,
 ) (bool, error) {
 	var existing, linked, eligibleNewRequest bool
-	err := tx.QueryRow(ctx, `SELECT
-		EXISTS(SELECT 1 FROM conversations WHERE direct_key = $1),
-		EXISTS(
+	query, args, buildErr := database.Query.Select().
+		Column("EXISTS(SELECT 1 FROM conversations WHERE direct_key = ?)", key).
+		Column(`EXISTS(
 			SELECT 1 FROM service_requests request
 			JOIN providers provider ON provider.id = request.provider_id
-			WHERE ((request.customer_uid = $2 AND provider.owner_uid = $3)
-			   OR (request.customer_uid = $3 AND provider.owner_uid = $2))
+			WHERE ((request.customer_uid = ? AND provider.owner_uid = ?)
+			   OR (request.customer_uid = ? AND provider.owner_uid = ?))
 			  AND request.status IN ('pending','accepted','in_progress','completed','no_show')
-		),
-		EXISTS(
+		)`, userID, otherUserID, otherUserID, userID).
+		Column(`EXISTS(
 			SELECT 1
 			FROM user_profiles requester
-			JOIN providers recipient ON recipient.owner_uid = $3
-			WHERE requester.firebase_uid = $2
+			JOIN providers recipient ON recipient.owner_uid = ?
+			JOIN user_profiles recipient_profile ON recipient_profile.firebase_uid=recipient.owner_uid
+			WHERE requester.firebase_uid = ?
 			  AND requester.active_role = 'customer'
+			  AND recipient_profile.allow_conversation_requests
 			  AND recipient.active
 			  AND recipient.accepting_requests
 			  AND recipient.onboarding_status = 'approved'
-		)`, key, userID, otherUserID,
-	).Scan(&existing, &linked, &eligibleNewRequest)
+		)`, otherUserID, userID).ToSql()
+	if buildErr != nil {
+		return false, fmt.Errorf("build direct conversation authorization: %w", buildErr)
+	}
+	err := tx.QueryRow(ctx, query, args...).Scan(&existing, &linked, &eligibleNewRequest)
 	if err != nil {
 		return false, fmt.Errorf("authorize direct conversation: %w", err)
 	}

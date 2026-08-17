@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/notifications/app_badge_service.dart';
+
 import '../../chat/presentation/pages/chat_list_page.dart';
 import '../../chat/presentation/providers/chat_providers.dart';
 import '../../profile/presentation/pages/account_page.dart';
@@ -8,6 +10,10 @@ import '../../service_requests/presentation/pages/service_requests_page.dart';
 import '../../help_now/presentation/pages/help_now_tracking_page.dart';
 import '../../help_now/presentation/providers/help_now_providers.dart';
 import '../../help_now/presentation/widgets/help_now_active_banner.dart';
+import '../../home/presentation/providers/home_providers.dart';
+import '../../profile/domain/entities/user_role.dart';
+import '../../profile/presentation/providers/profile_providers.dart';
+import '../../provider/presentation/providers/provider_workspace_providers.dart';
 import 'main_tab.dart';
 import 'main_shell_controller.dart';
 import 'widgets/main_tab_bar.dart';
@@ -41,6 +47,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   late MainShellController _controller;
   late bool _ownsController;
   MainTab _selected = MainTab.home;
+  int? _lastBadgeCount;
 
   @override
   void initState() {
@@ -77,6 +84,16 @@ class _MainShellState extends ConsumerState<MainShell> {
   @override
   Widget build(BuildContext context) {
     final unread = ref.watch(unreadChatCountProvider).value ?? 0;
+    final profile = ref.watch(currentProfileProvider).value;
+    final notificationUnread = profile?.activeRole == UserRole.provider
+        ? ref
+                  .watch(providerWorkspaceControllerProvider)
+                  .value
+                  ?.summary
+                  .unreadNotifications ??
+              0
+        : ref.watch(homeControllerProvider).value?.unreadNotificationCount ?? 0;
+    _scheduleBadge(unread + notificationUnread);
     final activeHelpNow = widget.showCustomerHelpNow
         ? ref.watch(customerHelpNowControllerProvider).value
         : null;
@@ -133,6 +150,14 @@ class _MainShellState extends ConsumerState<MainShell> {
         ),
       ),
     );
+  }
+
+  void _scheduleBadge(int count) {
+    if (_lastBadgeCount == count) return;
+    _lastBadgeCount = count;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) const PlatformAppBadgeService().update(count);
+    });
   }
 
   void _select(MainTab tab) {

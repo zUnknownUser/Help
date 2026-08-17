@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../auth/data/providers/auth_data_providers.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/providers/chat_data_providers.dart';
 import '../../data/realtime/chat_realtime_coordinator.dart';
 import '../../domain/entities/chat_conversation.dart';
@@ -32,7 +32,7 @@ final realtimeConnectionProvider = StreamProvider<RealtimeConnectionStatus>(
 );
 
 final currentChatUserIdProvider = Provider<String>(
-  (ref) => ref.watch(firebaseAuthProvider).currentUser?.uid ?? '',
+  (ref) => ref.watch(authStateProvider).value?.id ?? '',
 );
 
 final typingProvider = StreamProvider.autoDispose.family<bool, String>(

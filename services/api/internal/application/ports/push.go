@@ -23,6 +23,7 @@ type PushNotification struct {
 	Title string
 	Body  string
 	Data  map[string]string
+	Badge int
 }
 
 type PushDelivery struct {

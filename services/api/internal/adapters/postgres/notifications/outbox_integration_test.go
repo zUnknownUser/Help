@@ -96,7 +96,7 @@ func TestServiceRequestRemindersAreQueuedOncePerRecipientAndWindow(t *testing.T)
 	if _, err := pool.Exec(ctx, `INSERT INTO providers(id,name,active,accepting_requests,owner_uid,onboarding_status) VALUES($1,'Prestador',true,true,$2,'approved')`, providerID, providerUID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO services(id,provider_id,title,description,rating,reviews,duration_minutes,price_cents,old_price_cents,active,published_at) VALUES($1,$2,'Limpeza','',0,0,60,10000,10000,true,now())`, serviceID, providerID); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO services(id,provider_id,title,description,rating,reviews,duration_minutes,price_cents,old_price_cents,active,published_at) VALUES($1,$2,'Limpeza','',0,0,60,10000,NULL,true,now())`, serviceID, providerID); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Truncate(time.Second)

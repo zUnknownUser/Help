@@ -15,6 +15,7 @@ type Conversation struct {
 	OtherUserID         string             `json:"other_user_id"`
 	OtherDisplayName    string             `json:"other_display_name"`
 	OtherOnline         bool               `json:"other_online"`
+	OtherCanShowOnline  bool               `json:"-"`
 	OtherLastSeenAt     *time.Time         `json:"other_last_seen_at,omitempty"`
 	Status              ConversationStatus `json:"status"`
 	RequestedByMe       bool               `json:"requested_by_me"`

@@ -36,7 +36,7 @@ func (service *Service) FindOrCreateDirect(
 	}
 	conversation, recipients, changed, err := service.repository.FindOrCreateDirect(ctx, userID, otherUserID)
 	if err == nil && conversation.Status == domainchat.ConversationAccepted {
-		conversation.OtherOnline = service.publisher.IsOnline(otherUserID)
+		conversation.OtherOnline = conversation.OtherCanShowOnline && service.publisher.IsOnline(otherUserID)
 	}
 	if err == nil && changed {
 		service.publishConversation(recipients, conversation)
@@ -63,7 +63,7 @@ func (service *Service) DecideConversation(
 		return domainchat.Conversation{}, err
 	}
 	if conversation.Status == domainchat.ConversationAccepted {
-		conversation.OtherOnline = service.publisher.IsOnline(conversation.OtherUserID)
+		conversation.OtherOnline = conversation.OtherCanShowOnline && service.publisher.IsOnline(conversation.OtherUserID)
 	}
 	if changed {
 		service.publishConversation(recipients, conversation)
@@ -88,7 +88,7 @@ func (service *Service) ListConversations(
 		for index := range page.Conversations {
 			conversation := &page.Conversations[index]
 			if conversation.Status == domainchat.ConversationAccepted {
-				conversation.OtherOnline = service.publisher.IsOnline(conversation.OtherUserID)
+				conversation.OtherOnline = conversation.OtherCanShowOnline && service.publisher.IsOnline(conversation.OtherUserID)
 			} else {
 				conversation.OtherLastSeenAt = nil
 			}
@@ -266,17 +266,26 @@ func (service *Service) RelayCall(
 }
 
 func (service *Service) SessionConnected(ctx context.Context, userID string) error {
-	if _, err := service.repository.UpdateLastSeen(ctx, userID); err != nil {
+	lastSeenAt, err := service.repository.UpdateLastSeen(ctx, userID)
+	if err != nil {
 		return err
 	}
 	peers, err := service.repository.UserPeerPresences(ctx, userID)
 	if err != nil {
 		return err
 	}
+	policy, err := service.repository.PresencePolicy(ctx, userID)
+	if err != nil {
+		return err
+	}
 	for _, peer := range peers {
-		service.publisher.Publish(peer.UserID, presenceEvent(userID, true, nil))
+		var visibleLastSeen *time.Time
+		if policy.ShowLastSeen && !policy.ShowOnline {
+			visibleLastSeen = &lastSeenAt
+		}
+		service.publisher.Publish(peer.UserID, presenceEvent(userID, policy.ShowOnline, visibleLastSeen))
 		service.publisher.Publish(userID, presenceEvent(
-			peer.UserID, service.publisher.IsOnline(peer.UserID), peer.LastSeenAt,
+			peer.UserID, peer.CanShowOnline && service.publisher.IsOnline(peer.UserID), peer.LastSeenAt,
 		))
 	}
 	return nil
@@ -294,8 +303,16 @@ func (service *Service) SessionDisconnected(ctx context.Context, userID string) 
 	if err != nil {
 		return err
 	}
+	policy, err := service.repository.PresencePolicy(ctx, userID)
+	if err != nil {
+		return err
+	}
 	for _, peer := range peers {
-		service.publisher.Publish(peer.UserID, presenceEvent(userID, false, &lastSeenAt))
+		var visibleLastSeen *time.Time
+		if policy.ShowLastSeen {
+			visibleLastSeen = &lastSeenAt
+		}
+		service.publisher.Publish(peer.UserID, presenceEvent(userID, false, visibleLastSeen))
 	}
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/vendlydigital/help/services/api/internal/database"
 	domainhelp "github.com/vendlydigital/help/services/api/internal/domain/helpnow"
 )
 
@@ -18,9 +19,13 @@ func (repository *Repository) DispatchDue(ctx context.Context, now time.Time, li
 		return nil, fmt.Errorf("begin help now dispatch: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	rows, err := tx.Query(ctx, `SELECT id::text,customer_uid,search_wave,search_expires_at
-		FROM help_now_requests WHERE status='searching' AND next_dispatch_at<=$1
-		ORDER BY next_dispatch_at,id FOR UPDATE SKIP LOCKED LIMIT $2`, now, limit)
+	query, args, buildErr := database.Query.Select("id::text", "customer_uid", "search_wave", "search_expires_at").
+		From("help_now_requests").Where("status = ?", "searching").Where("next_dispatch_at <= ?", now).
+		OrderBy("next_dispatch_at", "id").Limit(uint64(limit)).Suffix("FOR UPDATE SKIP LOCKED").ToSql()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build help now dispatch claim: %w", buildErr)
+	}
+	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("claim help now dispatches: %w", err)
 	}
@@ -77,7 +82,8 @@ func (repository *Repository) offerWave(ctx context.Context, tx pgx.Tx, requestI
 		  AND provider.accepting_requests AND provider.onboarding_status='approved'
 		WHERE request.id=$1::uuid AND provider.owner_uid<>request.customer_uid
 		  AND EXISTS(SELECT 1 FROM services service WHERE service.provider_id=provider.id
-			AND service.category_id=request.category_id AND service.active AND service.deleted_at IS NULL)
+			AND (request.category_id IS NULL OR service.category_id=request.category_id)
+			AND service.active AND service.deleted_at IS NULL)
 		  AND NOT EXISTS(SELECT 1 FROM help_now_offers old
 			WHERE old.request_id=request.id AND old.provider_id=provider.id)
 	), candidates AS (
@@ -111,16 +117,31 @@ func (repository *Repository) offerWave(ctx context.Context, tx pgx.Tx, requestI
 		events = append(events, domainhelp.DispatchEvent{UserID: userID, Type: "help_now.offer", RequestID: requestID, OfferID: offerID})
 	}
 	rows.Close()
-	_, err = tx.Exec(ctx, `UPDATE help_now_requests SET search_wave=$2,next_dispatch_at=$3,updated_at=$4
-		WHERE id=$1::uuid`, requestID, wave, now.Add(offerTTL), now)
+	query, args, buildErr := database.Query.Update("help_now_requests").SetMap(map[string]any{
+		"search_wave": wave, "next_dispatch_at": now.Add(offerTTL), "updated_at": now,
+	}).Where("id = ?::uuid", requestID).ToSql()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build help now wave update: %w", buildErr)
+	}
+	_, err = tx.Exec(ctx, query, args...)
 	return events, err
 }
 
 func (repository *Repository) finishWithoutProvider(ctx context.Context, tx pgx.Tx, requestID, customerID string, now time.Time) error {
-	if _, err := tx.Exec(ctx, `UPDATE help_now_requests SET status='no_provider',updated_at=$2 WHERE id=$1::uuid`, requestID, now); err != nil {
+	query, args, buildErr := database.Query.Update("help_now_requests").Set("status", "no_provider").Set("updated_at", now).
+		Where("id = ?::uuid", requestID).ToSql()
+	if buildErr != nil {
+		return fmt.Errorf("build help now finish: %w", buildErr)
+	}
+	if _, err := tx.Exec(ctx, query, args...); err != nil {
 		return fmt.Errorf("finish help now search: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `UPDATE help_now_offers SET status='expired' WHERE request_id=$1::uuid AND status='offered'`, requestID); err != nil {
+	query, args, buildErr = database.Query.Update("help_now_offers").Set("status", "expired").
+		Where("request_id = ?::uuid", requestID).Where("status = ?", "offered").ToSql()
+	if buildErr != nil {
+		return fmt.Errorf("build help now offer expiry: %w", buildErr)
+	}
+	if _, err := tx.Exec(ctx, query, args...); err != nil {
 		return fmt.Errorf("expire help now offers: %w", err)
 	}
 	_, err := tx.Exec(ctx, `WITH notification AS (

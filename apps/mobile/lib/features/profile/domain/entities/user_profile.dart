@@ -1,4 +1,5 @@
 import 'user_role.dart';
+import 'profile_details.dart';
 
 enum ProviderOnboardingStatus { pending, approved, rejected }
 
@@ -9,6 +10,14 @@ class UserProfile {
     required this.activeRole,
     required this.roles,
     this.providerStatus,
+    this.phone = '',
+    this.avatarUrl = '',
+    this.preferences = const ProfilePreferences(),
+    this.professional,
+    this.portfolio = const [],
+    this.rating = 0,
+    this.reviewCount = 0,
+    this.completeness = 0,
   });
 
   final String email;
@@ -16,6 +25,14 @@ class UserProfile {
   final UserRole activeRole;
   final List<UserRole> roles;
   final ProviderOnboardingStatus? providerStatus;
+  final String phone;
+  final String avatarUrl;
+  final ProfilePreferences preferences;
+  final ProfessionalProfile? professional;
+  final List<PortfolioItem> portfolio;
+  final double rating;
+  final int reviewCount;
+  final int completeness;
 
   @override
   bool operator ==(Object other) =>

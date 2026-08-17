@@ -32,11 +32,13 @@ class _ProviderServiceFormPageState
   final _validator = const ProviderServiceValidator();
   late final TextEditingController _title;
   late final TextEditingController _description;
-  late final TextEditingController _duration;
   late final TextEditingController _price;
+  late final TextEditingController _oldPrice;
   late final TextEditingController _imageUrl;
   late String _categoryId;
   late bool _published;
+  late bool _hasPromotion;
+  late int _durationMinutes;
   bool _saving = false;
 
   @override
@@ -45,14 +47,20 @@ class _ProviderServiceFormPageState
     final service = widget.service;
     _title = TextEditingController(text: service?.title ?? '');
     _description = TextEditingController(text: service?.description ?? '');
-    _duration = TextEditingController(
-      text: service == null ? '' : '${service.durationMinutes}',
-    );
+    _durationMinutes = service?.durationMinutes ?? 60;
     _price = TextEditingController(
       text: service == null
           ? ''
           : (service.priceCents / 100).toStringAsFixed(2).replaceAll('.', ','),
     );
+    _oldPrice = TextEditingController(
+      text: service?.oldPriceCents == null
+          ? ''
+          : (service!.oldPriceCents! / 100)
+                .toStringAsFixed(2)
+                .replaceAll('.', ','),
+    );
+    _hasPromotion = service?.oldPriceCents != null;
     _imageUrl = TextEditingController(text: service?.imageUrl ?? '');
     _categoryId = service?.categoryId ?? '';
     _published = service?.published ?? true;
@@ -62,8 +70,8 @@ class _ProviderServiceFormPageState
   void dispose() {
     _title.dispose();
     _description.dispose();
-    _duration.dispose();
     _price.dispose();
+    _oldPrice.dispose();
     _imageUrl.dispose();
     super.dispose();
   }
@@ -115,34 +123,55 @@ class _ProviderServiceFormPageState
                     onChanged: (value) => setState(() => _categoryId = value),
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: AppTextField(
-                          controller: _duration,
-                          label: 'Duração (min)',
-                          validator: _validator.duration,
-                          keyboardType: TextInputType.number,
-                          textInputAction: TextInputAction.next,
-                          enabled: !_saving,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: AppTextField(
-                          controller: _price,
-                          label: 'Valor (R\$)',
-                          validator: _validator.price,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          textInputAction: TextInputAction.next,
-                          enabled: !_saving,
-                        ),
-                      ),
-                    ],
+                  ProviderDurationField(
+                    value: _durationMinutes,
+                    enabled: !_saving,
+                    onChanged: (value) =>
+                        setState(() => _durationMinutes = value),
                   ),
+                  const SizedBox(height: 16),
+                  AppTextField(
+                    controller: _price,
+                    label: _hasPromotion
+                        ? 'Valor promocional (R\$)'
+                        : 'Valor (R\$)',
+                    validator: _validator.price,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    textInputAction: TextInputAction.next,
+                    enabled: !_saving,
+                  ),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Este serviço está em promoção',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: const Text(
+                      'O preço anterior será exibido riscado.',
+                    ),
+                    value: _hasPromotion,
+                    onChanged: _saving
+                        ? null
+                        : (value) => setState(() {
+                            _hasPromotion = value;
+                            if (!value) _oldPrice.clear();
+                          }),
+                  ),
+                  if (_hasPromotion) ...[
+                    AppTextField(
+                      controller: _oldPrice,
+                      label: 'Valor anterior (R\$)',
+                      validator: (value) =>
+                          _validator.oldPrice(value, currentPrice: _price.text),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      enabled: !_saving,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   const SizedBox(height: 16),
                   AppTextField(
                     controller: _imageUrl,
@@ -196,8 +225,11 @@ class _ProviderServiceFormPageState
             title: _title.text,
             description: _description.text,
             categoryId: _categoryId,
-            durationMinutes: int.parse(_duration.text.trim()),
+            durationMinutes: _durationMinutes,
             priceCents: _validator.priceInCents(_price.text),
+            oldPriceCents: _hasPromotion
+                ? _validator.priceInCents(_oldPrice.text)
+                : null,
             imageUrl: _imageUrl.text,
             published: _published,
           ),

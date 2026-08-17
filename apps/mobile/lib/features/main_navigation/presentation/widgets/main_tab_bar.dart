@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../core/design_system/foundations/app_colors.dart';
 import '../main_tab.dart';
+import 'main_tab_icon.dart';
 
 class MainTabBar extends StatelessWidget {
   const MainTabBar({
@@ -91,7 +92,11 @@ class _TabItem extends StatelessWidget {
                     child: Badge(
                       isLabelVisible: badgeCount > 0,
                       label: Text(badgeCount > 99 ? '99+' : '$badgeCount'),
-                      child: Icon(_icon(tab, selected), size: 21, color: color),
+                      child: MainTabIcon(
+                        tab: tab,
+                        selected: selected,
+                        color: color,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -118,14 +123,4 @@ String _label(MainTab tab) => switch (tab) {
   MainTab.requests => 'Pedidos',
   MainTab.conversations => 'Conversas',
   MainTab.account => 'Conta',
-};
-
-IconData _icon(MainTab tab, bool selected) => switch (tab) {
-  MainTab.home => selected ? Icons.home_rounded : Icons.home_outlined,
-  MainTab.requests =>
-    selected ? Icons.calendar_month_rounded : Icons.calendar_month_outlined,
-  MainTab.conversations =>
-    selected ? Icons.forum_rounded : Icons.forum_outlined,
-  MainTab.account =>
-    selected ? Icons.person_rounded : Icons.person_outline_rounded,
 };

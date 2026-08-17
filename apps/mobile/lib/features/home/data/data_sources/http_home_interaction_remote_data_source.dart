@@ -55,6 +55,11 @@ class HttpHomeInteractionRemoteDataSource
     );
   }
 
+  @override
+  Future<void> markAllNotificationsRead() => _send(
+    () => _client.post(Uri.parse('$_baseUrl/v1/notifications/read-all')),
+  );
+
   Future<void> _send(Future<http.Response> Function() request) async {
     try {
       final response = await request().timeout(const Duration(seconds: 8));

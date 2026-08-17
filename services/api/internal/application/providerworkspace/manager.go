@@ -53,6 +53,6 @@ func (manager *Manager) SetAcceptingRequests(ctx context.Context, uid string, ac
 func draftFrom(input ports.ProviderServiceInput) (catalog.ServiceDraft, error) {
 	return catalog.NewServiceDraft(
 		input.Title, input.Description, input.CategoryID, input.DurationMinutes,
-		input.PriceCents, input.ImageURL, input.Published,
+		input.PriceCents, input.OldPriceCents, input.ImageURL, input.Published,
 	)
 }

@@ -65,7 +65,15 @@ type Profile struct {
 	UID            string
 	Email          domainauth.Email
 	DisplayName    string
+	Phone          string
 	ActiveRole     Role
 	Roles          []Role
 	ProviderStatus *ProviderStatus
+	AvatarPresent  bool
+	Preferences    Preferences
+	Professional   *Professional
+	Portfolio      []PortfolioItem
+	Rating         float64
+	ReviewCount    int
+	Completeness   int
 }

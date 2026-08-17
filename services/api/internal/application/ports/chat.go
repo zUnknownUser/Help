@@ -21,6 +21,7 @@ type ChatRepository interface {
 	ConversationRecipients(context.Context, string, string) ([]string, error)
 	UpdateLastSeen(context.Context, string) (time.Time, error)
 	UserPeerPresences(context.Context, string) ([]domainchat.Presence, error)
+	PresencePolicy(context.Context, string) (domainchat.PresencePolicy, error)
 }
 
 type ChatMediaRepository interface {

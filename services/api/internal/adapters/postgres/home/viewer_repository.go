@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/vendlydigital/help/services/api/internal/database"
 	domainhome "github.com/vendlydigital/help/services/api/internal/domain/home"
 )
 
@@ -82,12 +83,28 @@ func (repository *ViewerRepository) MarkRead(
 	ctx context.Context,
 	uid, notificationID string,
 ) error {
-	_, err := repository.pool.Exec(ctx, `
-		UPDATE notifications
-		SET read_at = COALESCE(read_at, now())
-		WHERE firebase_uid = $1 AND id = $2::uuid`, uid, notificationID)
+	query, args, buildErr := database.Query.Update("notifications").
+		Set("read_at", database.Expr("COALESCE(read_at, now())")).
+		Where("firebase_uid = ?", uid).Where("id = ?::uuid", notificationID).ToSql()
+	if buildErr != nil {
+		return fmt.Errorf("build mark notification read: %w", buildErr)
+	}
+	_, err := repository.pool.Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("mark notification read: %w", err)
 	}
 	return nil
+}
+
+func (repository *ViewerRepository) MarkAllRead(ctx context.Context, uid string) (int, error) {
+	query, args, err := database.Query.Update("notifications").Set("read_at", database.Expr("now()")).
+		Where("firebase_uid = ?", uid).Where("read_at IS NULL").ToSql()
+	if err != nil {
+		return 0, fmt.Errorf("build mark all notifications read: %w", err)
+	}
+	result, err := repository.pool.Exec(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("mark all notifications read: %w", err)
+	}
+	return int(result.RowsAffected()), nil
 }

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/auth_user.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../../domain/failures/auth_failure.dart';
 import '../providers/auth_providers.dart';
 import 'auth_form_state.dart';
 
@@ -43,6 +44,13 @@ class AuthController extends Notifier<AuthFormState> {
         return true;
       },
       onFailure: (failure) {
+        if (failure.type == AuthFailureType.cancelled) {
+          state = state.copyWith(
+            status: AuthFormStatus.idle,
+            clearFailure: true,
+          );
+          return false;
+        }
         state = state.copyWith(
           status: AuthFormStatus.failure,
           failure: failure,

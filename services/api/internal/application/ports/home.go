@@ -56,4 +56,5 @@ type HomeBaseGetter interface {
 
 type NotificationMarker interface {
 	MarkRead(ctx context.Context, uid, notificationID string) error
+	MarkAllRead(ctx context.Context, uid string) (int, error)
 }

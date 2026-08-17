@@ -28,7 +28,7 @@ class MessageStatusIcon extends StatelessWidget {
     ChatMessageStatus.read => Icon(
       Icons.done_all_rounded,
       size: size,
-      color: AppColors.primary,
+      color: AppColors.messageRead,
     ),
     ChatMessageStatus.failed => Icon(
       Icons.error_outline_rounded,

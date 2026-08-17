@@ -13,6 +13,7 @@ class ProviderServiceModel {
           description: ProviderJson.string(json, 'description'),
           durationMinutes: ProviderJson.integer(json, 'duration_minutes'),
           priceCents: ProviderJson.integer(json, 'price_cents'),
+          oldPriceCents: ProviderJson.optionalInteger(json, 'old_price_cents'),
           imageUrl: ProviderJson.string(json, 'image_url'),
           rating: ProviderJson.decimal(json, 'rating'),
           reviews: ProviderJson.integer(json, 'reviews'),

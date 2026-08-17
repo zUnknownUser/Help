@@ -35,6 +35,8 @@ void main() {
     expect(find.byKey(const Key('page_home')), findsOneWidget);
     expect(find.byType(BackButton), findsNothing);
     expect(find.text('3'), findsOneWidget);
+    expect(_asset('assets/icons/conversations.png'), findsOneWidget);
+    expect(_asset('assets/icons/profile.png'), findsOneWidget);
 
     controller.select(MainTab.requests);
     await tester.pumpAndSettle();
@@ -54,6 +56,13 @@ void main() {
     expect(find.byKey(const Key('page_home')), findsOneWidget);
   });
 }
+
+Finder _asset(String name) => find.byWidgetPredicate(
+  (widget) =>
+      widget is Image &&
+      widget.image is AssetImage &&
+      (widget.image as AssetImage).assetName == name,
+);
 
 class _Page extends StatelessWidget {
   const _Page(this.name);

@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/vendlydigital/help/services/api/internal/database"
+
 	domainchat "github.com/vendlydigital/help/services/api/internal/domain/chat"
 )
 
@@ -179,17 +181,17 @@ func (repository *Repository) UserPeerPresences(
 	ctx context.Context,
 	userID string,
 ) ([]domainchat.Presence, error) {
-	rows, err := repository.pool.Query(ctx, `
-		SELECT DISTINCT peer.firebase_uid, profile.last_seen_at
-		FROM conversation_members member
-		JOIN conversation_members peer
-		  ON peer.conversation_id = member.conversation_id
-		 AND peer.firebase_uid <> member.firebase_uid
-		JOIN user_profiles profile ON profile.firebase_uid = peer.firebase_uid
-		JOIN conversations conversation
-		  ON conversation.id = member.conversation_id
-		 AND conversation.status = 'accepted'
-		WHERE member.firebase_uid = $1`, userID)
+	query, args, buildErr := database.Query.Select("DISTINCT peer.firebase_uid",
+		"CASE WHEN profile.last_seen_visibility='nobody' THEN NULL ELSE profile.last_seen_at END",
+		"profile.show_online").From("conversation_members member").
+		Join("conversation_members peer ON peer.conversation_id=member.conversation_id AND peer.firebase_uid<>member.firebase_uid").
+		Join("user_profiles profile ON profile.firebase_uid=peer.firebase_uid").
+		Join("conversations conversation ON conversation.id=member.conversation_id AND conversation.status='accepted'").
+		Where("member.firebase_uid = ?", userID).ToSql()
+	if buildErr != nil {
+		return nil, fmt.Errorf("build chat peers: %w", buildErr)
+	}
+	rows, err := repository.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query chat peers: %w", err)
 	}
@@ -197,10 +199,27 @@ func (repository *Repository) UserPeerPresences(
 	var peers []domainchat.Presence
 	for rows.Next() {
 		var peer domainchat.Presence
-		if err := rows.Scan(&peer.UserID, &peer.LastSeenAt); err != nil {
+		if err := rows.Scan(&peer.UserID, &peer.LastSeenAt, &peer.CanShowOnline); err != nil {
 			return nil, err
 		}
 		peers = append(peers, peer)
 	}
 	return peers, rows.Err()
+}
+
+func (repository *Repository) PresencePolicy(ctx context.Context, userID string) (domainchat.PresencePolicy, error) {
+	query, args, err := database.Query.Select("show_online", "last_seen_visibility <> 'nobody'").
+		From("user_profiles").Where("firebase_uid = ?", userID).ToSql()
+	if err != nil {
+		return domainchat.PresencePolicy{}, fmt.Errorf("build presence policy: %w", err)
+	}
+	var policy domainchat.PresencePolicy
+	err = repository.pool.QueryRow(ctx, query, args...).Scan(&policy.ShowOnline, &policy.ShowLastSeen)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domainchat.PresencePolicy{}, domainchat.ErrForbidden
+	}
+	if err != nil {
+		return domainchat.PresencePolicy{}, fmt.Errorf("query presence policy: %w", err)
+	}
+	return policy, nil
 }

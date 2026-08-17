@@ -6,7 +6,14 @@ String chatPresenceLabel({
   required bool typing,
   DateTime? now,
 }) {
-  if (connection != RealtimeConnectionStatus.connected) return 'conectando…';
+  if (connection == RealtimeConnectionStatus.connecting) return 'conectando…';
+  if (connection == RealtimeConnectionStatus.disconnected) {
+    return chatLastSeenLabel(
+      online: false,
+      lastSeenAt: presence.lastSeenAt,
+      now: now,
+    );
+  }
   if (typing) return 'digitando…';
   return chatLastSeenLabel(
     online: presence.online,

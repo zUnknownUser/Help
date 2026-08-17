@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/design_system/components/app_loading.dart';
+import '../../../../core/design_system/components/app_error_state.dart';
 import '../../../../core/design_system/foundations/app_colors.dart';
 import '../../data/providers/chat_data_providers.dart';
 import '../../data/realtime/chat_realtime_coordinator.dart';
@@ -82,8 +83,12 @@ class _ChatListPageState extends ConsumerState<ChatListPage> {
               data: (items) => _conversationList(_applyFilter(items)),
               loading: () =>
                   const AppLoadingView(message: 'Abrindo conversas…'),
-              error: (_, _) => const Center(
-                child: Text('Não foi possível abrir as conversas.'),
+              error: (_, _) => AppErrorState(
+                title: 'Conversas indisponíveis',
+                message: 'Verifique sua conexão e tente novamente.',
+                onRetry: () => ref
+                    .read(chatRealtimeCoordinatorProvider)
+                    .loadMoreConversations(query: _query, reset: true),
               ),
             ),
           ),
@@ -98,7 +103,7 @@ class _ChatListPageState extends ConsumerState<ChatListPage> {
         filtered: _query.isNotEmpty || _filter != ConversationFilter.all,
       );
     }
-    final currentUserId = ref.read(currentChatUserIdProvider);
+    final currentUserId = ref.watch(currentChatUserIdProvider);
     return RefreshIndicator(
       onRefresh: () => ref
           .read(chatRealtimeCoordinatorProvider)

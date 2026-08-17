@@ -99,6 +99,8 @@ class AccountContent extends StatelessWidget {
       ),
       AccountTile(
         icon: Icons.forum_outlined,
+        iconAsset: 'assets/icons/conversations.png',
+        assetColor: AppColors.primary,
         title: 'Conversas',
         subtitle: 'Mensagens com clientes e profissionais',
         onTap: onChat,
@@ -189,6 +191,10 @@ class AccountContent extends StatelessWidget {
       AccountTile(
         key: const Key('customer_sign_out_button'),
         icon: Icons.logout_rounded,
+        iconAsset: profile.activeRole == UserRole.provider
+            ? 'assets/illustrations/provider_sign_out.png'
+            : 'assets/icons/sign_out.png',
+        assetPadding: 3,
         iconColor: AppColors.danger,
         title: 'Sair da conta',
         onTap: onSignOut,

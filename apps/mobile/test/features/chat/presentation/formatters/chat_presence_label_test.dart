@@ -55,4 +55,16 @@ void main() {
       'conectando…',
     );
   });
+
+  test('disconnected session does not stay indefinitely connecting', () {
+    expect(
+      chatPresenceLabel(
+        presence: const PresenceEvent(userId: 'peer', online: true),
+        connection: RealtimeConnectionStatus.disconnected,
+        typing: false,
+        now: now,
+      ),
+      'offline',
+    );
+  });
 }

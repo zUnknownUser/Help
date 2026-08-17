@@ -22,5 +22,10 @@ abstract interface class AuthRepository {
 
   Future<AuthResult<AuthUser>> refreshCurrentUser();
 
+  Future<AuthResult<void>> requestEmailChange({
+    required String newEmail,
+    String? currentPassword,
+  });
+
   Future<AuthResult<void>> signOut();
 }

@@ -18,5 +18,10 @@ abstract interface class AuthRemoteDataSource {
 
   Future<AuthUserModel> refreshCurrentUser();
 
+  Future<void> requestEmailChange({
+    required String newEmail,
+    String? currentPassword,
+  });
+
   Future<void> signOut();
 }

@@ -24,7 +24,7 @@ class ServiceOffer {
   final int reviews;
   final int durationMinutes;
   final int priceCents;
-  final int oldPriceCents;
+  final int? oldPriceCents;
   final double imageAlignment;
   final ServiceProvider provider;
   final String? imageUrl;

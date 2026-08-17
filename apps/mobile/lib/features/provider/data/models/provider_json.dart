@@ -21,6 +21,13 @@ abstract final class ProviderJson {
     return value.toInt();
   }
 
+  static int? optionalInteger(Map<String, dynamic> json, String field) {
+    final value = json[field];
+    if (value == null) return null;
+    if (value is! num) throw FormatException('$field must be a number');
+    return value.toInt();
+  }
+
   static double decimal(Map<String, dynamic> json, String field) {
     final value = json[field];
     if (value is! num) throw FormatException('$field must be a number');

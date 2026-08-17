@@ -128,6 +128,59 @@ class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
   }
 
   @override
+  Future<void> requestEmailChange({
+    required String newEmail,
+    String? currentPassword,
+  }) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      throw const AuthDataException(AuthDataErrorCode.invalidCredentials);
+    }
+    try {
+      await _reauthenticate(user, currentPassword);
+      await user
+          .verifyBeforeUpdateEmail(newEmail.trim().toLowerCase())
+          .timeout(const Duration(seconds: 20));
+    } on TimeoutException catch (error) {
+      throw AuthDataException(
+        AuthDataErrorCode.network,
+        debugMessage: '$error',
+      );
+    } on GoogleSignInException catch (error) {
+      throw _fromGoogle(error);
+    } on FirebaseAuthException catch (error) {
+      throw _fromFirebase(error);
+    }
+  }
+
+  Future<void> _reauthenticate(User user, String? currentPassword) async {
+    final providers = user.providerData.map((item) => item.providerId).toSet();
+    if (providers.contains(EmailAuthProvider.PROVIDER_ID)) {
+      final email = user.email;
+      if (email == null || (currentPassword ?? '').isEmpty) {
+        throw const AuthDataException(AuthDataErrorCode.recentLoginRequired);
+      }
+      await user.reauthenticateWithCredential(
+        EmailAuthProvider.credential(email: email, password: currentPassword!),
+      );
+      return;
+    }
+    if (providers.contains(GoogleAuthProvider.PROVIDER_ID)) {
+      await _ensureGoogleInitialized();
+      final account = await _googleSignIn.authenticate();
+      final token = account.authentication.idToken;
+      if (token == null) {
+        throw const AuthDataException(AuthDataErrorCode.configuration);
+      }
+      await user.reauthenticateWithCredential(
+        GoogleAuthProvider.credential(idToken: token),
+      );
+      return;
+    }
+    throw const AuthDataException(AuthDataErrorCode.recentLoginRequired);
+  }
+
+  @override
   Future<void> signOut() async {
     try {
       await _firebaseAuth.signOut().timeout(const Duration(seconds: 10));
@@ -178,7 +231,6 @@ class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
 
   AuthDataException _fromFirebase(FirebaseAuthException error) {
     final code = switch (error.code) {
-      'invalid-email' ||
       'invalid-credential' ||
       'user-disabled' ||
       'user-not-found' ||
@@ -186,6 +238,8 @@ class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
       'network-request-failed' => AuthDataErrorCode.network,
       'too-many-requests' => AuthDataErrorCode.tooManyRequests,
       'email-already-in-use' => AuthDataErrorCode.emailAlreadyInUse,
+      'invalid-email' => AuthDataErrorCode.invalidEmail,
+      'requires-recent-login' => AuthDataErrorCode.recentLoginRequired,
       'weak-password' => AuthDataErrorCode.weakPassword,
       'operation-not-allowed' => AuthDataErrorCode.configuration,
       _ => AuthDataErrorCode.unknown,

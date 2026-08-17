@@ -1,6 +1,7 @@
 import '../../../../core/result/result.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/entities/user_role.dart';
+import '../../domain/entities/profile_details.dart';
 import '../../domain/failures/profile_failure.dart';
 import '../../domain/repositories/profile_repository.dart';
 import '../data_sources/profile_remote_data_source.dart';
@@ -21,6 +22,27 @@ class ProfileRepositoryImpl implements ProfileRepository {
     required UserRole role,
   }) => _guard(() => _remote.register(displayName: displayName, role: role));
 
+  @override
+  Future<ProfileResult<UserProfile>> update(ProfileUpdate update) =>
+      _guard(() => _remote.update(update));
+
+  @override
+  Future<ProfileResult<void>> uploadAvatar(String filePath) =>
+      _guardVoid(() => _remote.uploadAvatar(filePath));
+
+  @override
+  Future<ProfileResult<PortfolioItem>> uploadPortfolio(
+    String filePath, {
+    String caption = '',
+  }) => _guardValue(() => _remote.uploadPortfolio(filePath, caption: caption));
+
+  @override
+  Future<ProfileResult<void>> deletePortfolio(String id) =>
+      _guardVoid(() => _remote.deletePortfolio(id));
+
+  @override
+  Future<ProfileResult<UserProfile>> syncEmail() => _guard(_remote.syncEmail);
+
   Future<ProfileResult<UserProfile>> _guard(
     Future<UserProfileModel> Function() operation,
   ) async {
@@ -40,6 +62,28 @@ class ProfileRepositoryImpl implements ProfileRepository {
       );
     }
   }
+
+  Future<ProfileResult<T>> _guardValue<T>(
+    Future<T> Function() operation,
+  ) async {
+    try {
+      return Success(await operation());
+    } on ProfileDataException catch (error) {
+      return FailureResult(
+        ProfileFailure(
+          _failureType(error.code),
+          debugMessage: error.debugMessage,
+        ),
+      );
+    } catch (error) {
+      return FailureResult(
+        ProfileFailure(ProfileFailureType.unknown, debugMessage: '$error'),
+      );
+    }
+  }
+
+  Future<ProfileResult<void>> _guardVoid(Future<void> Function() operation) =>
+      _guardValue(operation);
 }
 
 ProfileFailureType _failureType(ProfileDataErrorCode code) => switch (code) {

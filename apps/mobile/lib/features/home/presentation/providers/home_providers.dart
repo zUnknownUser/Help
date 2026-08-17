@@ -5,9 +5,11 @@ import '../../domain/entities/home_content.dart';
 import '../../domain/use_cases/get_home.dart';
 import '../../domain/use_cases/save_home_location.dart';
 import '../../domain/use_cases/mark_notification_read.dart';
+import '../../domain/use_cases/mark_all_notifications_read.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/home_action_controller.dart';
 import '../controllers/home_action_state.dart';
+import '../controllers/notification_action_controller.dart';
 
 final getHomeProvider = Provider<GetHome>(
   (ref) => GetHome(ref.watch(homeRepositoryProvider)),
@@ -26,6 +28,17 @@ final saveHomeLocationProvider = Provider<SaveHomeLocation>(
 final markNotificationReadProvider = Provider<MarkNotificationRead>(
   (ref) => MarkNotificationRead(ref.watch(homeInteractionRepositoryProvider)),
 );
+
+final markAllNotificationsReadProvider = Provider<MarkAllNotificationsRead>(
+  (ref) =>
+      MarkAllNotificationsRead(ref.watch(homeInteractionRepositoryProvider)),
+);
+
+final notificationActionControllerProvider =
+    NotifierProvider.autoDispose<
+      NotificationActionController,
+      NotificationActionState
+    >(NotificationActionController.new);
 
 final homeActionControllerProvider =
     NotifierProvider.autoDispose<HomeActionController, HomeActionState>(

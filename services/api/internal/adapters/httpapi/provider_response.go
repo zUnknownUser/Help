@@ -14,6 +14,7 @@ type managedServiceResponse struct {
 	Description     string  `json:"description"`
 	DurationMinutes int     `json:"duration_minutes"`
 	PriceCents      int     `json:"price_cents"`
+	OldPriceCents   *int    `json:"old_price_cents,omitempty"`
 	ImageURL        string  `json:"image_url"`
 	Rating          float64 `json:"rating"`
 	Reviews         int     `json:"reviews"`
@@ -25,8 +26,9 @@ func newManagedServiceResponse(service catalog.Service) managedServiceResponse {
 	return managedServiceResponse{
 		ID: service.ID, CategoryID: service.CategoryID, Title: service.Title,
 		Description: service.Description, DurationMinutes: service.DurationMinutes,
-		PriceCents: service.PriceCents, ImageURL: service.ImageURL,
-		Rating: service.Rating, Reviews: service.Reviews, Published: service.Active,
+		PriceCents: service.PriceCents, OldPriceCents: service.OldPriceCents,
+		ImageURL: service.ImageURL,
+		Rating:   service.Rating, Reviews: service.Reviews, Published: service.Active,
 		UpdatedAt: service.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }

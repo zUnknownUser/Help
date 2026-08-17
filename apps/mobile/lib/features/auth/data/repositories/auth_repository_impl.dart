@@ -56,6 +56,17 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<AuthResult<void>> requestEmailChange({
+    required String newEmail,
+    String? currentPassword,
+  }) => guardAuthDataOperation(
+    () => _remoteDataSource.requestEmailChange(
+      newEmail: newEmail,
+      currentPassword: currentPassword,
+    ),
+  );
+
+  @override
   Future<AuthResult<void>> signOut() =>
       guardAuthDataOperation(_remoteDataSource.signOut);
 }

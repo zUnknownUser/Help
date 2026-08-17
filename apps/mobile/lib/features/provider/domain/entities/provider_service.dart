@@ -6,6 +6,7 @@ class ProviderService {
     required this.description,
     required this.durationMinutes,
     required this.priceCents,
+    this.oldPriceCents,
     required this.imageUrl,
     required this.rating,
     required this.reviews,
@@ -19,6 +20,7 @@ class ProviderService {
   final String description;
   final int durationMinutes;
   final int priceCents;
+  final int? oldPriceCents;
   final String imageUrl;
   final double rating;
   final int reviews;
@@ -32,6 +34,7 @@ class ProviderService {
     description: description,
     durationMinutes: durationMinutes,
     priceCents: priceCents,
+    oldPriceCents: oldPriceCents,
     imageUrl: imageUrl,
     rating: rating,
     reviews: reviews,
@@ -47,6 +50,7 @@ class ProviderServiceDraft {
     required this.categoryId,
     required this.durationMinutes,
     required this.priceCents,
+    this.oldPriceCents,
     required this.imageUrl,
     required this.published,
   });
@@ -56,6 +60,7 @@ class ProviderServiceDraft {
   final String categoryId;
   final int durationMinutes;
   final int priceCents;
+  final int? oldPriceCents;
   final String imageUrl;
   final bool published;
 }

@@ -40,7 +40,7 @@ func TestPublishedProviderServiceAppearsInCustomerCatalog(t *testing.T) {
 	repository := NewRepository(pool)
 	draft, _ := catalog.NewServiceDraft(
 		"Limpeza residencial", "Limpeza completa para casas e apartamentos.",
-		categoryID, 120, 15000, "", true,
+		categoryID, 120, 15000, nil, "", true,
 	)
 	created, err := repository.CreateService(ctx, providerUID, draft)
 	if err != nil {

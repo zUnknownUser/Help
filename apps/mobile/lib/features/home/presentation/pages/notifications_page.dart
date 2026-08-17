@@ -26,7 +26,19 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Notificações')),
+      appBar: AppBar(
+        title: const Text('Notificações'),
+        actions: [
+          if (_hasUnread)
+            TextButton(
+              onPressed:
+                  ref.watch(notificationActionControllerProvider).markingAll
+                  ? null
+                  : _markAll,
+              child: const Text('Ler todas'),
+            ),
+        ],
+      ),
       body: widget.notifications.isEmpty
           ? const _EmptyNotifications()
           : ListView.separated(
@@ -61,18 +73,39 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     );
   }
 
+  bool get _hasUnread => widget.notifications.any(
+    (item) => !item.read && !_readDuringSession.contains(item.id),
+  );
+
   Future<void> _markRead(String id) async {
+    setState(() => _readDuringSession.add(id));
     final success = await ref
-        .read(homeActionControllerProvider.notifier)
-        .markNotificationRead(id);
+        .read(notificationActionControllerProvider.notifier)
+        .markOne(id);
     if (!mounted) return;
-    if (success) {
-      setState(() => _readDuringSession.add(id));
-      return;
-    }
+    if (success) return;
+    setState(() => _readDuringSession.remove(id));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Não foi possível atualizar a notificação.'),
+      ),
+    );
+  }
+
+  Future<void> _markAll() async {
+    final unread = widget.notifications
+        .where((item) => !item.read)
+        .map((item) => item.id)
+        .toSet();
+    setState(() => _readDuringSession.addAll(unread));
+    final success = await ref
+        .read(notificationActionControllerProvider.notifier)
+        .markAll();
+    if (!mounted || success) return;
+    setState(() => _readDuringSession.removeAll(unread));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Não foi possível marcar todas como lidas.'),
       ),
     );
   }
@@ -83,7 +116,8 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
   }) async {
     if (!read) await _markRead(notification.id);
     if (!mounted) return;
-    if (notification.kind == 'service_request') {
+    if (notification.kind == 'service_request' ||
+        notification.kind == 'service_review') {
       final requestId = notification.data['request_id'];
       if (requestId != null && requestId.isNotEmpty) {
         await Navigator.of(context).push<void>(

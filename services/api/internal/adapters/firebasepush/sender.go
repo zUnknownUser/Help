@@ -27,12 +27,15 @@ func (sender *Sender) Send(
 			Notification: &messaging.Notification{
 				Title: message.Title, Body: message.Body,
 			},
-			Data:    message.Data,
-			Android: &messaging.AndroidConfig{Priority: "high"},
+			Data: message.Data,
+			Android: &messaging.AndroidConfig{Priority: "high", Notification: &messaging.AndroidNotification{
+				NotificationCount: &message.Badge,
+			}},
 			APNS: &messaging.APNSConfig{
 				Headers: map[string]string{"apns-priority": "10"},
 				Payload: &messaging.APNSPayload{Aps: &messaging.Aps{
 					Sound: "default", ContentAvailable: true, ThreadID: message.Data["request_id"] + message.Data["conversation_id"],
+					Badge: &message.Badge,
 				}},
 			},
 		})

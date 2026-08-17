@@ -22,6 +22,7 @@ type ServiceDraft struct {
 	CategoryID      string
 	DurationMinutes int
 	PriceCents      int
+	OldPriceCents   *int
 	ImageURL        string
 	Published       bool
 }
@@ -29,13 +30,15 @@ type ServiceDraft struct {
 func NewServiceDraft(
 	title, description, categoryID string,
 	durationMinutes, priceCents int,
+	oldPriceCents *int,
 	imageURL string,
 	published bool,
 ) (ServiceDraft, error) {
 	draft := ServiceDraft{
 		Title: strings.TrimSpace(title), Description: strings.TrimSpace(description),
 		CategoryID: strings.TrimSpace(categoryID), DurationMinutes: durationMinutes,
-		PriceCents: priceCents, ImageURL: strings.TrimSpace(imageURL), Published: published,
+		PriceCents: priceCents, OldPriceCents: oldPriceCents,
+		ImageURL: strings.TrimSpace(imageURL), Published: published,
 	}
 	if length := utf8.RuneCountInString(draft.Title); length < 3 || length > 100 {
 		return ServiceDraft{}, ErrInvalidServiceTitle
@@ -50,6 +53,9 @@ func NewServiceDraft(
 		return ServiceDraft{}, ErrInvalidServiceDuration
 	}
 	if draft.PriceCents < 0 || draft.PriceCents > 100_000_000 {
+		return ServiceDraft{}, ErrInvalidServicePrice
+	}
+	if draft.OldPriceCents != nil && (*draft.OldPriceCents <= draft.PriceCents || *draft.OldPriceCents > 100_000_000) {
 		return ServiceDraft{}, ErrInvalidServicePrice
 	}
 	if !validImageURL(draft.ImageURL) {

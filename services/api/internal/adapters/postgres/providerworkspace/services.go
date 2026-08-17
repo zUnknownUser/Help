@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/vendlydigital/help/services/api/internal/database"
 	"github.com/vendlydigital/help/services/api/internal/domain/catalog"
 	"github.com/vendlydigital/help/services/api/internal/domain/providers"
 )
@@ -26,20 +27,19 @@ func (repository *Repository) CreateService(
 	if err != nil {
 		return catalog.Service{}, err
 	}
-	row := repository.pool.QueryRow(ctx, `
-		INSERT INTO services (
-			id, provider_id, category_id, title, description, rating, reviews,
-			duration_minutes, price_cents, old_price_cents, image_url,
-			image_alignment, badge, active, published_at
-		) VALUES (
-			gen_random_uuid()::text, $1, NULLIF($2, ''), $3, $4, 0, 0,
-			$5, $6, $6, $7, 0, '', $8,
-			CASE WHEN $8 THEN now() ELSE NULL END
-		)
-		RETURNING `+managedServiceColumns,
-		providerID, draft.CategoryID, draft.Title, draft.Description,
-		draft.DurationMinutes, draft.PriceCents, draft.ImageURL, draft.Published,
-	)
+	query, args, err := database.Query.Insert("services").Columns(
+		"id", "provider_id", "category_id", "title", "description", "rating", "reviews",
+		"duration_minutes", "price_cents", "old_price_cents", "image_url",
+		"image_alignment", "badge", "active", "published_at",
+	).Values(
+		database.Expr("gen_random_uuid()::text"), providerID, nullableCategory(draft.CategoryID),
+		draft.Title, draft.Description, 0, 0, draft.DurationMinutes, draft.PriceCents,
+		draft.OldPriceCents, draft.ImageURL, 0, "", draft.Published, publishedAt(draft.Published),
+	).Suffix("RETURNING " + managedServiceColumns).ToSql()
+	if err != nil {
+		return catalog.Service{}, fmt.Errorf("build create provider service: %w", err)
+	}
+	row := repository.pool.QueryRow(ctx, query, args...)
 	service, err := scanService(row)
 	return service, mapServiceWriteError("create provider service", err)
 }
@@ -53,18 +53,22 @@ func (repository *Repository) UpdateService(
 	if err != nil {
 		return catalog.Service{}, err
 	}
-	row := repository.pool.QueryRow(ctx, `
-		UPDATE services SET
-			category_id = NULLIF($3, ''), title = $4, description = $5,
-			duration_minutes = $6, price_cents = $7, old_price_cents = $7,
-			image_url = $8, active = $9,
-			published_at = CASE WHEN $9 THEN COALESCE(published_at, now()) ELSE published_at END,
-			updated_at = now()
-		WHERE id = $1 AND provider_id = $2 AND deleted_at IS NULL
-		RETURNING `+managedServiceColumns,
-		serviceID, providerID, draft.CategoryID, draft.Title, draft.Description,
-		draft.DurationMinutes, draft.PriceCents, draft.ImageURL, draft.Published,
-	)
+	update := database.Query.Update("services").SetMap(map[string]any{
+		"category_id": nullableCategory(draft.CategoryID), "title": draft.Title,
+		"description": draft.Description, "duration_minutes": draft.DurationMinutes,
+		"price_cents": draft.PriceCents, "old_price_cents": draft.OldPriceCents,
+		"image_url": draft.ImageURL, "active": draft.Published,
+		"updated_at": database.Expr("now()"),
+	})
+	if draft.Published {
+		update = update.Set("published_at", database.Expr("COALESCE(published_at, now())"))
+	}
+	query, args, err := update.Where("id = ?", serviceID).Where("provider_id = ?", providerID).
+		Where("deleted_at IS NULL").Suffix("RETURNING " + managedServiceColumns).ToSql()
+	if err != nil {
+		return catalog.Service{}, fmt.Errorf("build update provider service: %w", err)
+	}
+	row := repository.pool.QueryRow(ctx, query, args...)
 	service, err := scanService(row)
 	return service, mapServiceWriteError("update provider service", err)
 }
@@ -78,13 +82,17 @@ func (repository *Repository) SetServicePublished(
 	if err != nil {
 		return catalog.Service{}, err
 	}
-	row := repository.pool.QueryRow(ctx, `
-		UPDATE services SET
-			active = $3,
-			published_at = CASE WHEN $3 THEN COALESCE(published_at, now()) ELSE published_at END,
-			updated_at = now()
-		WHERE id = $1 AND provider_id = $2 AND deleted_at IS NULL
-		RETURNING `+managedServiceColumns, serviceID, providerID, published)
+	update := database.Query.Update("services").Set("active", published).
+		Set("updated_at", database.Expr("now()"))
+	if published {
+		update = update.Set("published_at", database.Expr("COALESCE(published_at, now())"))
+	}
+	query, args, err := update.Where("id = ?", serviceID).Where("provider_id = ?", providerID).
+		Where("deleted_at IS NULL").Suffix("RETURNING " + managedServiceColumns).ToSql()
+	if err != nil {
+		return catalog.Service{}, fmt.Errorf("build publish provider service: %w", err)
+	}
+	row := repository.pool.QueryRow(ctx, query, args...)
 	service, err := scanService(row)
 	return service, mapServiceWriteError("publish provider service", err)
 }
@@ -94,9 +102,14 @@ func (repository *Repository) DeleteService(ctx context.Context, uid, serviceID 
 	if err != nil {
 		return err
 	}
-	result, err := repository.pool.Exec(ctx, `
-		UPDATE services SET active = false, deleted_at = now(), updated_at = now()
-		WHERE id = $1 AND provider_id = $2 AND deleted_at IS NULL`, serviceID, providerID)
+	query, args, err := database.Query.Update("services").Set("active", false).
+		Set("deleted_at", database.Expr("now()")).Set("updated_at", database.Expr("now()")).
+		Where("id = ?", serviceID).Where("provider_id = ?", providerID).
+		Where("deleted_at IS NULL").ToSql()
+	if err != nil {
+		return fmt.Errorf("build delete provider service: %w", err)
+	}
+	result, err := repository.pool.Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("delete provider service: %w", err)
 	}
@@ -110,9 +123,12 @@ func (repository *Repository) SetAcceptingRequests(ctx context.Context, uid stri
 	if _, err := repository.authorizedProviderID(ctx, uid); err != nil {
 		return err
 	}
-	_, err := repository.pool.Exec(ctx, `
-		UPDATE providers SET accepting_requests = $2, updated_at = now()
-		WHERE owner_uid = $1`, uid, accepting)
+	query, args, err := database.Query.Update("providers").Set("accepting_requests", accepting).
+		Set("updated_at", database.Expr("now()")).Where("owner_uid = ?", uid).ToSql()
+	if err != nil {
+		return fmt.Errorf("build provider availability: %w", err)
+	}
+	_, err = repository.pool.Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("update provider availability: %w", err)
 	}
@@ -122,8 +138,12 @@ func (repository *Repository) SetAcceptingRequests(ctx context.Context, uid stri
 func (repository *Repository) authorizedProviderID(ctx context.Context, uid string) (string, error) {
 	var id, status string
 	var active bool
-	err := repository.pool.QueryRow(ctx, `
-		SELECT id, onboarding_status, active FROM providers WHERE owner_uid = $1`, uid).
+	query, args, buildErr := database.Query.Select("id", "onboarding_status", "active").
+		From("providers").Where("owner_uid = ?", uid).ToSql()
+	if buildErr != nil {
+		return "", fmt.Errorf("build provider authorization: %w", buildErr)
+	}
+	err := repository.pool.QueryRow(ctx, query, args...).
 		Scan(&id, &status, &active)
 	if err == pgx.ErrNoRows {
 		return "", providers.ErrWorkspaceNotFound
@@ -135,6 +155,20 @@ func (repository *Repository) authorizedProviderID(ctx context.Context, uid stri
 		return "", providers.ErrProviderUnavailable
 	}
 	return id, nil
+}
+
+func nullableCategory(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
+func publishedAt(published bool) any {
+	if published {
+		return database.Expr("now()")
+	}
+	return nil
 }
 
 func mapServiceWriteError(operation string, err error) error {

@@ -19,4 +19,9 @@ void main() {
     expect(validator.priceInCents('1.250,90'), 125090);
     expect(validator.priceInCents('150.50'), 15050);
   });
+
+  test('promoção exige preço anterior maior que o atual', () {
+    expect(validator.oldPrice('100,00', currentPrice: '100,00'), isNotNull);
+    expect(validator.oldPrice('120,00', currentPrice: '100,00'), isNull);
+  });
 }

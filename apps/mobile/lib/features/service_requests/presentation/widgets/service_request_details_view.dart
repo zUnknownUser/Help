@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/components/app_button.dart';
+import '../../../../core/design_system/components/app_error_state.dart';
 import '../../../../core/design_system/foundations/app_colors.dart';
 import '../../domain/entities/service_request_item.dart';
 import 'request_status_badge.dart';
 import 'service_request_tile.dart';
+import '../../../reviews/presentation/service_review_card.dart';
 
 class ServiceRequestDetailsView extends StatelessWidget {
   const ServiceRequestDetailsView({
@@ -62,6 +64,10 @@ class ServiceRequestDetailsView extends StatelessWidget {
             leading: const Icon(Icons.forum_outlined, size: 18),
             onPressed: onChat,
           ),
+        ],
+        if (request.status == ServiceRequestStatus.completed) ...[
+          const SizedBox(height: 12),
+          ServiceReviewCard(request: request),
         ],
         if (onReschedule != null) ...[
           const SizedBox(height: 10),
@@ -189,21 +195,10 @@ class ServiceRequestDetailsError extends StatelessWidget {
   final Future<void> Function() onRetry;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Não foi possível carregar esta solicitação.'),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: 220,
-            child: AppButton(label: 'Tentar novamente', onPressed: onRetry),
-          ),
-        ],
-      ),
-    ),
+  Widget build(BuildContext context) => AppErrorState(
+    title: 'Solicitação indisponível',
+    message: 'Não foi possível carregar os detalhes agora.',
+    onRetry: onRetry,
   );
 }
 

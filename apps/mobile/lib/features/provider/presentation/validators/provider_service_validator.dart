@@ -32,6 +32,15 @@ class ProviderServiceValidator {
     return null;
   }
 
+  String? oldPrice(String? value, {required String currentPrice}) {
+    final invalid = price(value);
+    if (invalid != null) return invalid;
+    if (priceInCents(value!) <= priceInCents(currentPrice)) {
+      return 'O valor anterior precisa ser maior que o promocional.';
+    }
+    return null;
+  }
+
   String? imageUrl(String? value) {
     final text = value?.trim() ?? '';
     if (text.isEmpty) return null;

@@ -27,6 +27,9 @@ type RouterDependencies struct {
 	TokenVerifier              ports.IDTokenVerifier
 	ProfileRegistrar           ports.ProfileRegistrar
 	ProfileReader              ports.ProfileReader
+	ProfileUpdater             ports.ProfileUpdater
+	ProfileEmailSynchronizer   ports.ProfileEmailSynchronizer
+	ProfileMediaService        ports.ProfileMediaService
 	DefaultLocationSaver       ports.DefaultLocationSaver
 	NotificationMarker         ports.NotificationMarker
 	HomeGetter                 ports.HomeGetter
@@ -34,6 +37,7 @@ type RouterDependencies struct {
 	ServiceDetailsGetter       ports.ServiceDetailsGetter
 	ServiceRequestCreator      ports.ServiceRequestCreator
 	ServiceRequestLifecycle    ports.ServiceRequestLifecycle
+	ReviewService              ports.ReviewService
 	ProviderScheduleManager    ports.ProviderScheduleManager
 	ServiceAvailability        ports.ServiceAvailability
 	ProviderHomeGetter         ports.ProviderHomeGetter
@@ -73,9 +77,17 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 			),
 		),
 	)
-	profileHandler := NewProfileHandler(dependencies.ProfileRegistrar, dependencies.ProfileReader)
+	profileHandler := NewProfileHandler(dependencies.ProfileRegistrar, dependencies.ProfileReader, dependencies.ProfileUpdater, dependencies.ProfileEmailSynchronizer)
 	mux.Handle("GET /v1/profile", requireAuth(dependencies.TokenVerifier, profileHandler))
 	mux.Handle("POST /v1/profile", requireAuth(dependencies.TokenVerifier, profileHandler))
+	mux.Handle("PUT /v1/profile", requireAuth(dependencies.TokenVerifier, profileHandler))
+	mux.Handle("POST /v1/profile/email/sync", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(profileHandler.SyncEmail)))
+	profileMediaHandler := NewProfileMediaHandler(dependencies.ProfileMediaService)
+	mux.Handle("PUT /v1/profile/avatar", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(profileMediaHandler.UploadAvatar)))
+	mux.Handle("GET /v1/profile/avatar/{uid}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(profileMediaHandler.Avatar)))
+	mux.Handle("POST /v1/profile/portfolio", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(profileMediaHandler.UploadPortfolio)))
+	mux.HandleFunc("GET /v1/profile/portfolio/{id}", profileMediaHandler.Portfolio)
+	mux.Handle("DELETE /v1/profile/portfolio/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(profileMediaHandler.DeletePortfolio)))
 	mux.Handle(
 		"PUT /v1/profile/location",
 		requireAuth(dependencies.TokenVerifier, NewLocationHandler(dependencies.DefaultLocationSaver)),
@@ -83,6 +95,10 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 	mux.Handle(
 		"POST /v1/notifications/{id}/read",
 		requireAuth(dependencies.TokenVerifier, NewNotificationReadHandler(dependencies.NotificationMarker)),
+	)
+	mux.Handle(
+		"POST /v1/notifications/read-all",
+		requireAuth(dependencies.TokenVerifier, http.HandlerFunc(NewNotificationReadHandler(dependencies.NotificationMarker).MarkAll)),
 	)
 	mux.Handle(
 		"GET /v1/home",
@@ -103,6 +119,9 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 	mux.Handle("GET /v1/service-requests/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(requestHandler.Details)))
 	mux.Handle("POST /v1/service-requests/{id}/transitions", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(requestHandler.Transition)))
 	mux.Handle("POST /v1/service-requests/{id}/reschedule", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(requestHandler.Reschedule)))
+	reviewHandler := NewReviewHandler(dependencies.ReviewService)
+	mux.Handle("GET /v1/service-requests/{id}/reviews", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(reviewHandler.List)))
+	mux.Handle("PUT /v1/service-requests/{id}/reviews/mine", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(reviewHandler.Create)))
 	providerHandler := NewProviderHandler(dependencies.ProviderHomeGetter, dependencies.ProviderServiceManager)
 	mux.Handle("GET /v1/provider/home", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(providerHandler.Home)))
 	mux.Handle("POST /v1/provider/services", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(providerHandler.CreateService)))

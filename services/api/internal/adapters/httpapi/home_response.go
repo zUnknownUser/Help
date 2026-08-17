@@ -72,7 +72,7 @@ type homeService struct {
 	Reviews         int          `json:"reviews"`
 	DurationMinutes int          `json:"duration_minutes"`
 	PriceCents      int          `json:"price_cents"`
-	OldPriceCents   int          `json:"old_price_cents"`
+	OldPriceCents   *int         `json:"old_price_cents,omitempty"`
 	ImageURL        string       `json:"image_url,omitempty"`
 	ImageAlignment  float64      `json:"image_alignment"`
 	Badge           string       `json:"badge,omitempty"`

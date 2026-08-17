@@ -86,6 +86,21 @@ void main() {
     expect(container.read(authControllerProvider).failure, failure);
   });
 
+  test('cancelar o Google volta ao estado neutro sem mensagem', () async {
+    const failure = AuthFailure(AuthFailureType.cancelled);
+    when(googleUseCase.call).thenAnswer(
+      (_) async => const FailureResult<AuthUser, AuthFailure>(failure),
+    );
+
+    final succeeded = await container
+        .read(authControllerProvider.notifier)
+        .signInWithGoogle();
+
+    expect(succeeded, isFalse);
+    expect(container.read(authControllerProvider).status, AuthFormStatus.idle);
+    expect(container.read(authControllerProvider).failure, isNull);
+  });
+
   test('não publica estado depois que o controller é descartado', () async {
     final completer = Completer<AuthResult<AuthUser>>();
     when(googleUseCase.call).thenAnswer((_) => completer.future);

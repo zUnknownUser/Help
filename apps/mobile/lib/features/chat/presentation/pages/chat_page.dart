@@ -224,7 +224,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (items.isEmpty) {
       return const Center(child: Text('Envie a primeira mensagem.'));
     }
-    final currentUserId = ref.read(currentChatUserIdProvider);
+    final currentUserId = ref.watch(currentChatUserIdProvider);
     return ListView.builder(
       controller: _scroll,
       reverse: true,

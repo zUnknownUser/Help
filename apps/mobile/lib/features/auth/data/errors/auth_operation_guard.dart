@@ -26,5 +26,7 @@ AuthFailureType _toFailureType(AuthDataErrorCode code) => switch (code) {
   AuthDataErrorCode.weakPassword => AuthFailureType.weakPassword,
   AuthDataErrorCode.cancelled => AuthFailureType.cancelled,
   AuthDataErrorCode.configuration => AuthFailureType.configuration,
+  AuthDataErrorCode.invalidEmail => AuthFailureType.invalidEmail,
+  AuthDataErrorCode.recentLoginRequired => AuthFailureType.recentLoginRequired,
   AuthDataErrorCode.unknown => AuthFailureType.unknown,
 };

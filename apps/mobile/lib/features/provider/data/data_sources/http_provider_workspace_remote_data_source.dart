@@ -156,12 +156,13 @@ class HttpProviderWorkspaceRemoteDataSource
 
 const _jsonHeaders = {'Content-Type': 'application/json'};
 
-Map<String, Object> _draftJson(ProviderServiceDraft draft) => {
+Map<String, Object?> _draftJson(ProviderServiceDraft draft) => {
   'title': draft.title,
   'description': draft.description,
   'category_id': draft.categoryId,
   'duration_minutes': draft.durationMinutes,
   'price_cents': draft.priceCents,
+  'old_price_cents': draft.oldPriceCents,
   'image_url': draft.imageUrl,
   'published': draft.published,
 };

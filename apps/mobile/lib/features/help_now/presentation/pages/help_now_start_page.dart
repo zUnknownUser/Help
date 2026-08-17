@@ -18,6 +18,8 @@ class HelpNowStartPage extends ConsumerStatefulWidget {
   final List<ServiceCategory> categories;
   final HomeLocation location;
 
+  static const acceptsUncategorized = true;
+
   @override
   ConsumerState<HelpNowStartPage> createState() => _HelpNowStartPageState();
 }
@@ -26,6 +28,18 @@ class _HelpNowStartPageState extends ConsumerState<HelpNowStartPage> {
   final _note = TextEditingController();
   ServiceCategory? _selected;
   bool _sending = false;
+
+  static const _general = ServiceCategory(
+    id: '',
+    name: 'Ajuda geral',
+    iconKey: 'help',
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.categories.isEmpty) _selected = _general;
+  }
 
   @override
   void dispose() {
@@ -61,7 +75,7 @@ class _HelpNowStartPageState extends ConsumerState<HelpNowStartPage> {
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: widget.categories
+                children: [...widget.categories, _general]
                     .map(
                       (category) => ChoiceChip(
                         label: Text(category.name.replaceAll('\n', ' ')),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/design_system/foundations/app_colors.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/entities/user_role.dart';
+import 'profile_avatar.dart';
 
 class AccountProfileHeader extends StatelessWidget {
   const AccountProfileHeader({
@@ -25,15 +26,15 @@ class AccountProfileHeader extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 31,
-              backgroundColor: AppColors.primarySoft,
-              foregroundColor: AppColors.primaryDark,
-              child: Text(
+            ProfileAvatar(
+              size: 62,
+              url: profile.avatarUrl,
+              fallback: Text(
                 _initials(profile.displayName),
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w900,
+                  color: AppColors.primaryDark,
                 ),
               ),
             ),

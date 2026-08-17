@@ -15,6 +15,9 @@ extension AuthFailureMessage on AuthFailure {
     AuthFailureType.cancelled => 'Entrada cancelada.',
     AuthFailureType.configuration =>
       'Este método de entrada ainda não está configurado.',
+    AuthFailureType.invalidEmail => 'Informe um endereço de e-mail válido.',
+    AuthFailureType.recentLoginRequired =>
+      'Confirme sua identidade novamente para alterar o e-mail.',
     AuthFailureType.unknown =>
       'Não foi possível entrar agora. Tente novamente em instantes.',
   };

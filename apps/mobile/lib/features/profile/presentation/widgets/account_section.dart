@@ -59,6 +59,9 @@ class AccountTile extends StatelessWidget {
     this.subtitle,
     this.iconColor = AppColors.primary,
     this.trailing,
+    this.iconAsset,
+    this.assetColor,
+    this.assetPadding = 6,
     super.key,
   });
 
@@ -68,6 +71,9 @@ class AccountTile extends StatelessWidget {
   final Color iconColor;
   final VoidCallback? onTap;
   final Widget? trailing;
+  final String? iconAsset;
+  final Color? assetColor;
+  final double assetPadding;
 
   @override
   Widget build(BuildContext context) => ListTile(
@@ -80,7 +86,18 @@ class AccountTile extends StatelessWidget {
         color: iconColor.withValues(alpha: .1),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Icon(icon, color: iconColor, size: 20),
+      child: iconAsset == null
+          ? Icon(icon, color: iconColor, size: 20)
+          : Padding(
+              padding: EdgeInsets.all(assetPadding),
+              child: Image.asset(
+                iconAsset!,
+                fit: BoxFit.contain,
+                color: assetColor,
+                colorBlendMode: assetColor == null ? null : BlendMode.srcIn,
+                filterQuality: FilterQuality.high,
+              ),
+            ),
     ),
     title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
     subtitle: subtitle == null

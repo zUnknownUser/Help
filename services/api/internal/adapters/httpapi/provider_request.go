@@ -12,6 +12,7 @@ type providerServiceRequest struct {
 	CategoryID      string `json:"category_id"`
 	DurationMinutes int    `json:"duration_minutes"`
 	PriceCents      int    `json:"price_cents"`
+	OldPriceCents   *int   `json:"old_price_cents"`
 	ImageURL        string `json:"image_url"`
 	Published       bool   `json:"published"`
 }
@@ -33,6 +34,7 @@ func decodeProviderServiceInput(w http.ResponseWriter, r *http.Request) (ports.P
 	return ports.ProviderServiceInput{
 		Title: request.Title, Description: request.Description, CategoryID: request.CategoryID,
 		DurationMinutes: request.DurationMinutes, PriceCents: request.PriceCents,
-		ImageURL: request.ImageURL, Published: request.Published,
+		OldPriceCents: request.OldPriceCents,
+		ImageURL:      request.ImageURL, Published: request.Published,
 	}, true
 }

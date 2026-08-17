@@ -60,10 +60,13 @@ type MessageMutation struct {
 }
 
 type Presence struct {
-	UserID     string     `json:"user_id"`
-	Online     bool       `json:"online"`
-	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
+	UserID        string     `json:"user_id"`
+	Online        bool       `json:"online"`
+	LastSeenAt    *time.Time `json:"last_seen_at,omitempty"`
+	CanShowOnline bool       `json:"-"`
 }
+
+type PresencePolicy struct{ ShowOnline, ShowLastSeen bool }
 
 type Receipt struct {
 	ConversationID string `json:"conversation_id"`

@@ -125,18 +125,20 @@ class _PriceRow extends StatelessWidget {
               formatMoney(offer.priceCents),
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
             ),
-            const SizedBox(width: 4),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 1),
-              child: Text(
-                formatMoney(offer.oldPriceCents),
-                style: const TextStyle(
-                  fontSize: 8,
-                  decoration: TextDecoration.lineThrough,
-                  color: AppColors.textSecondary,
+            if (offer.oldPriceCents case final oldPrice?) ...[
+              const SizedBox(width: 4),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 1),
+                child: Text(
+                  formatMoney(oldPrice),
+                  style: const TextStyle(
+                    fontSize: 8,
+                    decoration: TextDecoration.lineThrough,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
-            ),
+            ],
             const SizedBox(width: 9),
             Container(
               height: 28,

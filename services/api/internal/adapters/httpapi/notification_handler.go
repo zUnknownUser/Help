@@ -14,6 +14,21 @@ func NewNotificationReadHandler(marker ports.NotificationMarker) *NotificationRe
 	return &NotificationReadHandler{marker: marker}
 }
 
+func (handler *NotificationReadHandler) MarkAll(w http.ResponseWriter, r *http.Request) {
+	identity, ok := authenticatedIdentity(r.Context())
+	if !ok {
+		writeUnauthorized(w)
+		return
+	}
+	count, err := handler.marker.MarkAllRead(r.Context(), identity.UID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "mark all notifications read failed", "user_id", identity.UID, "error", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"message": "Não foi possível atualizar as notificações agora."})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]int{"updated": count, "unread_count": 0}})
+}
+
 func (handler *NotificationReadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	identity, ok := authenticatedIdentity(r.Context())
 	if !ok {

@@ -29,7 +29,7 @@ func (repository *Repository) Respond(ctx context.Context, uid string, command d
 		if previousOffer != command.OfferID || previousAction != command.Action {
 			return domainhelp.Request{}, nil, domainhelp.ErrIdempotency
 		}
-		request, loadErr := scanRequest(tx.QueryRow(ctx, requestSelect+` WHERE request.id=$1::uuid`, previousRequest))
+		request, loadErr := queryRequest(ctx, tx, previousRequest)
 		return request, nil, loadErr
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -64,7 +64,7 @@ func (repository *Repository) Respond(ctx context.Context, uid string, command d
 			VALUES($1,$2::uuid,$3::uuid,'decline',$4::uuid)`, uid, command.ClientID, command.OfferID, requestID); err != nil {
 			return domainhelp.Request{}, nil, fmt.Errorf("record help now decline: %w", err)
 		}
-		request, err := scanRequest(tx.QueryRow(ctx, requestSelect+` WHERE request.id=$1::uuid`, requestID))
+		request, err := queryRequest(ctx, tx, requestID)
 		if err == nil {
 			err = tx.Commit(ctx)
 		}
@@ -78,7 +78,8 @@ func (repository *Repository) accept(ctx context.Context, tx pgx.Tx, uid string,
 	var durationMinutes, bufferMinutes, priceCents int
 	err := tx.QueryRow(ctx, `SELECT service.id,service.duration_minutes,setting.buffer_minutes,service.price_cents
 		FROM help_now_requests request
-		JOIN services service ON service.provider_id=$2 AND service.category_id=request.category_id
+		JOIN services service ON service.provider_id=$2
+		  AND (request.category_id IS NULL OR service.category_id=request.category_id)
 		  AND service.active AND service.deleted_at IS NULL
 		JOIN providers provider ON provider.id=service.provider_id AND provider.active
 		  AND provider.accepting_requests AND provider.onboarding_status='approved'
@@ -150,7 +151,7 @@ func (repository *Repository) accept(ctx context.Context, tx pgx.Tx, uid string,
 		losers = append(losers, recipient)
 	}
 	rows.Close()
-	request, err := scanRequest(tx.QueryRow(ctx, requestSelect+` WHERE request.id=$1::uuid`, requestID))
+	request, err := queryRequest(ctx, tx, requestID)
 	if err != nil {
 		return domainhelp.Request{}, nil, fmt.Errorf("load assigned help now request: %w", err)
 	}

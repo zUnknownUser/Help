@@ -42,14 +42,25 @@ class ProviderHomePage extends ConsumerWidget {
             icon: Badge(
               isLabelVisible: unreadChat > 0,
               label: Text(unreadChat > 99 ? '99+' : '$unreadChat'),
-              child: const Icon(Icons.forum_outlined),
+              child: Image.asset(
+                'assets/icons/conversations.png',
+                width: 22,
+                height: 22,
+                color: AppColors.primaryDark,
+                colorBlendMode: BlendMode.srcIn,
+              ),
             ),
           ),
           IconButton(
             key: const Key('provider_sign_out_button'),
             tooltip: 'Sair',
             onPressed: () => ref.read(signOutProvider)(),
-            icon: const Icon(Icons.logout_rounded),
+            icon: Image.asset(
+              'assets/illustrations/provider_sign_out.png',
+              width: 27,
+              height: 27,
+              filterQuality: FilterQuality.high,
+            ),
           ),
         ],
       ),

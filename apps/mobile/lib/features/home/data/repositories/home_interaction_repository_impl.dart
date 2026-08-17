@@ -19,6 +19,10 @@ class HomeInteractionRepositoryImpl implements HomeInteractionRepository {
   Future<HomeOperationResult<void>> markNotificationRead(String id) =>
       _guard(() => _remote.markNotificationRead(id));
 
+  @override
+  Future<HomeOperationResult<void>> markAllNotificationsRead() =>
+      _guard(_remote.markAllNotificationsRead);
+
   Future<HomeOperationResult<void>> _guard(
     Future<void> Function() operation,
   ) async {

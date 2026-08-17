@@ -68,7 +68,7 @@ type DispatchEvent struct {
 }
 
 func NewCreateInput(clientID, categoryID, note, label, address string, latitude, longitude float64) (CreateInput, error) {
-	if _, err := uuid.Parse(clientID); err != nil || strings.TrimSpace(categoryID) == "" ||
+	if _, err := uuid.Parse(clientID); err != nil ||
 		latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 {
 		return CreateInput{}, ErrInvalidInput
 	}

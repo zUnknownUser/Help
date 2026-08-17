@@ -6,6 +6,8 @@ enum AuthDataErrorCode {
   weakPassword,
   cancelled,
   configuration,
+  invalidEmail,
+  recentLoginRequired,
   unknown,
 }
 

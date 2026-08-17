@@ -39,7 +39,7 @@ func TestDispatchAllowsExactlyOneProviderToAccept(t *testing.T) {
 			VALUES($1,'Prestador',true,true,$2,'approved')`, providerIDs[index], providerUIDs[index])
 		execHelpNowSQL(t, pool, `INSERT INTO provider_schedule_settings(provider_id,buffer_minutes) VALUES($1,0)`, providerIDs[index])
 		execHelpNowSQL(t, pool, `INSERT INTO services(id,provider_id,category_id,title,description,rating,reviews,duration_minutes,
-			price_cents,old_price_cents,active,published_at) VALUES($1,$2,$3,'Reparo urgente','',0,0,60,10000,10000,true,now())`,
+			price_cents,old_price_cents,active,published_at) VALUES($1,$2,$3,'Reparo urgente','',0,0,60,10000,NULL,true,now())`,
 			serviceIDs[index], providerIDs[index], categoryID)
 	}
 	repository := NewRepository(pool)

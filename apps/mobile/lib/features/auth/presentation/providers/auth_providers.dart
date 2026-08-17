@@ -18,6 +18,7 @@ import '../controllers/email_verification_controller.dart';
 import '../controllers/email_verification_state.dart';
 import '../../../chat/data/providers/chat_data_providers.dart';
 import '../../../notifications/data/push_providers.dart';
+import '../../../../core/notifications/app_badge_service.dart';
 
 final signInWithEmailProvider = Provider<SignInWithEmail>(
   (ref) => SignInWithEmail(ref.watch(authRepositoryProvider)),
@@ -33,6 +34,7 @@ final signOutProvider = Provider<Future<void> Function()>((ref) {
     await ref.read(pushRegistrationServiceProvider).unregister();
     ref.read(chatRealtimeCoordinatorProvider).stop();
     await signOut();
+    await const PlatformAppBadgeService().update(0);
   };
 });
 

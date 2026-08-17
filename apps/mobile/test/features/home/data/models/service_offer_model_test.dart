@@ -17,4 +17,21 @@ void main() {
 
     expect(offer.categoryId, isEmpty);
   });
+
+  test('aceita preço anterior ausente quando não existe promoção', () {
+    final offer = ServiceOfferModel.fromJson({
+      'id': 'service-2',
+      'title': 'Manutenção',
+      'category_id': '',
+      'rating': 0,
+      'reviews': 0,
+      'duration_minutes': 90,
+      'price_cents': 15000,
+      'old_price_cents': null,
+      'image_alignment': 0,
+      'provider': {'id': 'provider-1', 'name': 'Luis', 'verified': true},
+    }).toEntity();
+
+    expect(offer.oldPriceCents, isNull);
+  });
 }

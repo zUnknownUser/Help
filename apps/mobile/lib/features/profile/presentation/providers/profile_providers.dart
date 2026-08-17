@@ -9,6 +9,8 @@ import '../controllers/profile_setup_controller.dart';
 import '../controllers/profile_setup_state.dart';
 import '../controllers/profile_role_controller.dart';
 import '../controllers/profile_role_state.dart';
+import '../controllers/profile_editor_controller.dart';
+import '../controllers/profile_editor_state.dart';
 
 final getCurrentProfileProvider = Provider<GetCurrentProfile>(
   (ref) => GetCurrentProfile(ref.watch(profileRepositoryProvider)),
@@ -32,4 +34,9 @@ final profileSetupControllerProvider =
 final profileRoleControllerProvider =
     NotifierProvider.autoDispose<ProfileRoleController, ProfileRoleState>(
       ProfileRoleController.new,
+    );
+
+final profileEditorControllerProvider =
+    NotifierProvider.autoDispose<ProfileEditorController, ProfileEditorState>(
+      ProfileEditorController.new,
     );

@@ -28,7 +28,9 @@ class ServiceOfferModel {
         reviews: JsonReader.integer(json, 'reviews'),
         durationMinutes: JsonReader.integer(json, 'duration_minutes'),
         priceCents: JsonReader.integer(json, 'price_cents'),
-        oldPriceCents: JsonReader.integer(json, 'old_price_cents'),
+        oldPriceCents: json['old_price_cents'] == null
+            ? null
+            : JsonReader.integer(json, 'old_price_cents'),
         imageUrl: JsonReader.optionalString(json, 'image_url'),
         imageAlignment: JsonReader.decimal(json, 'image_alignment'),
         badge: JsonReader.optionalString(json, 'badge'),
@@ -45,7 +47,7 @@ class ServiceOfferModel {
   final int reviews;
   final int durationMinutes;
   final int priceCents;
-  final int oldPriceCents;
+  final int? oldPriceCents;
   final String? imageUrl;
   final double imageAlignment;
   final String? badge;

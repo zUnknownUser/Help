@@ -17,7 +17,7 @@ type Service struct {
 	Reviews         int
 	DurationMinutes int
 	PriceCents      int
-	OldPriceCents   int
+	OldPriceCents   *int
 	ImageURL        string
 	ImageAlignment  float64
 	Badge           string

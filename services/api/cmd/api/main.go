@@ -27,6 +27,7 @@ import (
 	postgresprofiles "github.com/vendlydigital/help/services/api/internal/adapters/postgres/profiles"
 	postgrespromotions "github.com/vendlydigital/help/services/api/internal/adapters/postgres/promotions"
 	postgresprovider "github.com/vendlydigital/help/services/api/internal/adapters/postgres/providerworkspace"
+	postgresreviews "github.com/vendlydigital/help/services/api/internal/adapters/postgres/reviews"
 	postgresscheduling "github.com/vendlydigital/help/services/api/internal/adapters/postgres/scheduling"
 	postgresrequests "github.com/vendlydigital/help/services/api/internal/adapters/postgres/servicerequests"
 	"github.com/vendlydigital/help/services/api/internal/adapters/realtime"
@@ -38,6 +39,7 @@ import (
 	applicationprofiles "github.com/vendlydigital/help/services/api/internal/application/profiles"
 	applicationprovider "github.com/vendlydigital/help/services/api/internal/application/providerworkspace"
 	applicationpush "github.com/vendlydigital/help/services/api/internal/application/push"
+	applicationreviews "github.com/vendlydigital/help/services/api/internal/application/reviews"
 	applicationscheduling "github.com/vendlydigital/help/services/api/internal/application/scheduling"
 	applicationrequests "github.com/vendlydigital/help/services/api/internal/application/servicerequests"
 	"github.com/vendlydigital/help/services/api/internal/config"
@@ -101,6 +103,8 @@ func run() error {
 	)
 	profileRepository := postgresprofiles.NewRepository(pool)
 	registerProfile := applicationprofiles.NewRegisterProfile(profileRepository)
+	updateProfile := applicationprofiles.NewUpdateProfile(profileRepository)
+	syncProfileEmail := applicationprofiles.NewSyncEmail(profileRepository)
 	locationRepository := postgresprofiles.NewLocationRepository(pool)
 	saveDefaultLocation := applicationprofiles.NewSaveDefaultLocation(locationRepository)
 	viewerRepository := postgreshome.NewViewerRepository(pool)
@@ -143,6 +147,8 @@ func run() error {
 		return err
 	}
 	chatMediaService := applicationchat.NewMediaService(postgreschat.NewRepository(pool), mediaStore)
+	profileMediaService := applicationprofiles.NewMediaService(profileRepository, mediaStore)
+	reviewService := applicationreviews.NewService(postgresreviews.NewRepository(pool))
 	iceConfigService := applicationchat.NewICEConfigService(applicationchat.ICEConfig{
 		STUNURLs:      cfg.RTC.STUNURLs,
 		TURNURLs:      cfg.RTC.TURNURLs,
@@ -157,6 +163,9 @@ func run() error {
 		TokenVerifier:              tokenVerifier,
 		ProfileRegistrar:           registerProfile,
 		ProfileReader:              profileRepository,
+		ProfileUpdater:             updateProfile,
+		ProfileEmailSynchronizer:   syncProfileEmail,
+		ProfileMediaService:        profileMediaService,
 		DefaultLocationSaver:       saveDefaultLocation,
 		NotificationMarker:         viewerRepository,
 		HomeGetter:                 getHome,
@@ -164,6 +173,7 @@ func run() error {
 		ServiceDetailsGetter:       serviceDetails,
 		ServiceRequestCreator:      serviceRequests,
 		ServiceRequestLifecycle:    serviceRequestLifecycle,
+		ReviewService:              reviewService,
 		ProviderScheduleManager:    scheduleService,
 		ServiceAvailability:        scheduleService,
 		ProviderHomeGetter:         providerHome,

@@ -10,9 +10,11 @@ import (
 
 type RegisterProfileInput = ports.ProfileRegistrationInput
 
-type RegisterProfile struct{ writer ports.ProfileWriter }
+type RegisterProfile struct {
+	writer ports.ProfileRegistrarRepository
+}
 
-func NewRegisterProfile(writer ports.ProfileWriter) *RegisterProfile {
+func NewRegisterProfile(writer ports.ProfileRegistrarRepository) *RegisterProfile {
 	return &RegisterProfile{writer: writer}
 }
 

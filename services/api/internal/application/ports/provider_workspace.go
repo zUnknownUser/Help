@@ -25,6 +25,7 @@ type ProviderServiceInput struct {
 	CategoryID      string
 	DurationMinutes int
 	PriceCents      int
+	OldPriceCents   *int
 	ImageURL        string
 	Published       bool
 }

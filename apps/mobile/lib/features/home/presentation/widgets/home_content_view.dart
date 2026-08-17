@@ -147,7 +147,7 @@ class HomeContentView extends ConsumerWidget {
       await _openLocation(context, ref);
       return;
     }
-    if (content.categories.isEmpty) {
+    if (content.categories.isEmpty && !HelpNowStartPage.acceptsUncategorized) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Nenhuma categoria disponível agora.')),
       );

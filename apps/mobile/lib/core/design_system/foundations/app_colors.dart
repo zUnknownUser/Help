@@ -14,4 +14,5 @@ abstract final class AppColors {
   static const danger = Color(0xFFB42318);
   static const dangerSoft = Color(0xFFFFF1F0);
   static const amber = Color(0xFFF5A623);
+  static const messageRead = Color(0xFF168AAD);
 }

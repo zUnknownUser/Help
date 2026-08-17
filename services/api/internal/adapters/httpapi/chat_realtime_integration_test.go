@@ -315,7 +315,7 @@ func TestChatRepositoryConcurrentSequenceAndCursorPagination(t *testing.T) {
 		t.Fatal(err)
 	}
 	serviceID := "sequence-service-" + suffix
-	if _, err := pool.Exec(ctx, `INSERT INTO services(id,provider_id,title,rating,duration_minutes,price_cents,old_price_cents,active,published_at) VALUES($1,$2,'Serviço de chat',5,60,10000,10000,true,now())`, serviceID, providerID); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO services(id,provider_id,title,rating,duration_minutes,price_cents,old_price_cents,active,published_at) VALUES($1,$2,'Serviço de chat',5,60,10000,NULL,true,now())`, serviceID, providerID); err != nil {
 		t.Fatal(err)
 	}
 	scheduled := time.Now().Add(60 * 24 * time.Hour)

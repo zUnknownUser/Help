@@ -1,0 +1,903 @@
+{
+  "info": {
+    "_postman_id": "b91126a4-a204-4b67-bbb4-46a7fc251d7f",
+    "name": "Help API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "bearer": [
+      {
+        "key": "token",
+        "type": "string",
+        "value": "{{id_token}}"
+      }
+    ],
+    "type": "bearer"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "type": "string",
+      "value": "https://lucas.tailc561e1.ts.net"
+    },
+    {
+      "key": "id_token",
+      "type": "string",
+      "value": ""
+    },
+    {
+      "key": "id",
+      "type": "string",
+      "value": ""
+    },
+    {
+      "key": "uid",
+      "type": "string",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST /v1/auth/email-verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/auth/email-verification",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /v1/auth/password-reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"usuario@exemplo.com\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/auth/password-reset",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "GET /v1/chat/conversations",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/chat/conversations"
+          }
+        },
+        {
+          "name": "GET /v1/chat/conversations/{id}/messages",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/chat/conversations/:id/messages"
+          }
+        },
+        {
+          "name": "GET /v1/chat/media/{id}",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/chat/media/:id"
+          }
+        },
+        {
+          "name": "POST /v1/chat/conversations/direct",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":\"{{uid}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/chat/conversations/direct"
+          }
+        },
+        {
+          "name": "POST /v1/chat/conversations/{id}/decision",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"accept\":true}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/chat/conversations/:id/decision"
+          }
+        },
+        {
+          "name": "POST /v1/chat/conversations/{id}/voice-media",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/chat/conversations/:id/voice-media"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Devices",
+      "item": [
+        {
+          "name": "DELETE /v1/devices/{id}",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/v1/devices/:id"
+          }
+        },
+        {
+          "name": "POST /v1/devices",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/devices"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Help Now",
+      "item": [
+        {
+          "name": "GET /v1/help-now/provider/availability",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/help-now/provider/availability"
+          }
+        },
+        {
+          "name": "GET /v1/help-now/provider/offers",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/help-now/provider/offers"
+          }
+        },
+        {
+          "name": "GET /v1/help-now/requests/active",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/help-now/requests/active"
+          }
+        },
+        {
+          "name": "POST /v1/help-now/provider/offers/{id}/responses",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"client_command_id\":\"{{$guid}}\",\"action\":\"accept\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/help-now/provider/offers/:id/responses"
+          }
+        },
+        {
+          "name": "POST /v1/help-now/requests",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"client_request_id\":\"{{$guid}}\",\"category_id\":\"\",\"note\":\"Preciso de ajuda\",\"latitude\":-3.1,\"longitude\":-60.0,\"address_label\":\"Local atual\",\"formatted_address\":\"Manaus - AM\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/help-now/requests"
+          }
+        },
+        {
+          "name": "POST /v1/help-now/requests/{id}/cancel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"client_request_id\":\"{{$guid}}\",\"category_id\":\"\",\"note\":\"Preciso de ajuda\",\"latitude\":-3.1,\"longitude\":-60.0,\"address_label\":\"Local atual\",\"formatted_address\":\"Manaus - AM\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/help-now/requests/:id/cancel"
+          }
+        },
+        {
+          "name": "PUT /v1/help-now/provider/availability",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/help-now/provider/availability"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Home",
+      "item": [
+        {
+          "name": "GET /v1/home",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/home"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "POST /v1/notifications/read-all",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/notifications/read-all"
+          }
+        },
+        {
+          "name": "POST /v1/notifications/{id}/read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/notifications/:id/read"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "item": [
+        {
+          "name": "DELETE /v1/profile/portfolio/{id}",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/v1/profile/portfolio/:id"
+          }
+        },
+        {
+          "name": "GET /v1/profile",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/profile"
+          }
+        },
+        {
+          "name": "GET /v1/profile/avatar/{uid}",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/profile/avatar/:uid"
+          }
+        },
+        {
+          "name": "GET /v1/profile/portfolio/{id}",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/profile/portfolio/:id",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /v1/profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"display_name\":\"Maria Silva\",\"role\":\"customer\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/profile"
+          }
+        },
+        {
+          "name": "POST /v1/profile/email/sync",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/profile/email/sync"
+          }
+        },
+        {
+          "name": "POST /v1/profile/portfolio",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/v1/profile/portfolio"
+          }
+        },
+        {
+          "name": "PUT /v1/profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"display_name\":\"Maria Silva\",\"phone\":\"92999999999\",\"contact_preference\":\"chat\",\"photo_visibility\":\"everyone\",\"last_seen_visibility\":\"conversations\",\"show_online\":true,\"allow_conversation_requests\":true,\"professional\":null}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/profile"
+          }
+        },
+        {
+          "name": "PUT /v1/profile/avatar",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/v1/profile/avatar"
+          }
+        },
+        {
+          "name": "PUT /v1/profile/location",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/profile/location"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Provider",
+      "item": [
+        {
+          "name": "DELETE /v1/provider/schedule/blocks/{id}",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/v1/provider/schedule/blocks/:id"
+          }
+        },
+        {
+          "name": "DELETE /v1/provider/services/{id}",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/v1/provider/services/:id"
+          }
+        },
+        {
+          "name": "GET /v1/provider/agenda",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/provider/agenda"
+          }
+        },
+        {
+          "name": "GET /v1/provider/home",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/provider/home"
+          }
+        },
+        {
+          "name": "GET /v1/provider/schedule",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/provider/schedule"
+          }
+        },
+        {
+          "name": "PATCH /v1/provider/availability",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/provider/availability"
+          }
+        },
+        {
+          "name": "PATCH /v1/provider/services/{id}/publication",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/provider/services/:id/publication"
+          }
+        },
+        {
+          "name": "POST /v1/provider/schedule/blocks",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/provider/schedule/blocks"
+          }
+        },
+        {
+          "name": "POST /v1/provider/services",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/provider/services"
+          }
+        },
+        {
+          "name": "PUT /v1/provider/schedule",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/provider/schedule"
+          }
+        },
+        {
+          "name": "PUT /v1/provider/services/{id}",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/provider/services/:id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Realtime",
+      "item": [
+        {
+          "name": "GET /v1/realtime",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/realtime"
+          }
+        },
+        {
+          "name": "GET /v1/realtime/ice-config",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/realtime/ice-config"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Service Requests",
+      "item": [
+        {
+          "name": "GET /v1/service-requests",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/service-requests"
+          }
+        },
+        {
+          "name": "GET /v1/service-requests/{id}",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/service-requests/:id"
+          }
+        },
+        {
+          "name": "GET /v1/service-requests/{id}/reviews",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/service-requests/:id/reviews"
+          }
+        },
+        {
+          "name": "POST /v1/service-requests/{id}/reschedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"client_command_id\":\"{{$guid}}\",\"scheduled_for\":\"2026-08-20T14:00:00Z\",\"expected_version\":0}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/service-requests/:id/reschedule"
+          }
+        },
+        {
+          "name": "POST /v1/service-requests/{id}/transitions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"client_command_id\":\"{{$guid}}\",\"target_status\":\"accepted\",\"expected_version\":0,\"reason\":\"\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/service-requests/:id/transitions"
+          }
+        },
+        {
+          "name": "PUT /v1/service-requests/{id}/reviews/mine",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"rating\":5,\"comment\":\"Ótima experiência\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/service-requests/:id/reviews/mine"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Services",
+      "item": [
+        {
+          "name": "GET /v1/services",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/services"
+          }
+        },
+        {
+          "name": "GET /v1/services/{id}",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/services/:id"
+          }
+        },
+        {
+          "name": "GET /v1/services/{id}/available-slots",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/services/:id/available-slots"
+          }
+        },
+        {
+          "name": "POST /v1/services/{id}/requests",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/v1/services/:id/requests"
+          }
+        }
+      ]
+    },
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/health",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "GET /ready",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/ready",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "GET /v1/users",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/users"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -6,6 +6,8 @@ enum AuthFailureType {
   weakPassword,
   cancelled,
   configuration,
+  invalidEmail,
+  recentLoginRequired,
   unknown,
 }
 

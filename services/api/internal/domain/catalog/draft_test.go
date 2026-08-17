@@ -12,7 +12,7 @@ func TestNewServiceDraftNormalizesValidInput(t *testing.T) {
 
 	draft, err := domaincatalog.NewServiceDraft(
 		"  Limpeza residencial  ", "  Limpeza completa do imovel.  ",
-		" house-cleaning ", 120, 15990, " https://example.com/image.jpg ", true,
+		" house-cleaning ", 120, 15990, nil, " https://example.com/image.jpg ", true,
 	)
 
 	if err != nil {
@@ -46,7 +46,7 @@ func TestNewServiceDraftRejectsInvalidFields(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			_, err := domaincatalog.NewServiceDraft(
-				test.title, test.description, "", test.duration, test.price,
+				test.title, test.description, "", test.duration, test.price, nil,
 				test.imageURL, false,
 			)
 			if !errors.Is(err, test.want) {
