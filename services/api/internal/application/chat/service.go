@@ -5,19 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/vendlydigital/help/services/api/internal/application/ports"
 	domainchat "github.com/vendlydigital/help/services/api/internal/domain/chat"
-)
-
-const (
-	EventMessageNew       = "message.new"
-	EventMessageDelivered = "message.delivered"
-	EventMessageRead      = "message.read"
-	EventTypingStart      = "typing.start"
-	EventTypingStop       = "typing.stop"
 )
 
 type Service struct {
@@ -41,7 +34,41 @@ func (service *Service) FindOrCreateDirect(
 	if userID == otherUserID || strings.TrimSpace(otherUserID) == "" {
 		return domainchat.Conversation{}, domainchat.ErrRecipientNotFound
 	}
-	return service.repository.FindOrCreateDirect(ctx, userID, otherUserID)
+	conversation, recipients, changed, err := service.repository.FindOrCreateDirect(ctx, userID, otherUserID)
+	if err == nil && conversation.Status == domainchat.ConversationAccepted {
+		conversation.OtherOnline = service.publisher.IsOnline(otherUserID)
+	}
+	if err == nil && changed {
+		service.publishConversation(recipients, conversation)
+		if conversation.Status == domainchat.ConversationPending && service.notifier != nil {
+			for _, recipient := range recipients {
+				if !service.publisher.IsOnline(recipient) {
+					go service.notifyConversationRequest(recipient, conversation.ID)
+				}
+			}
+		}
+	}
+	return conversation, err
+}
+
+func (service *Service) DecideConversation(
+	ctx context.Context,
+	userID, conversationID string,
+	accept bool,
+) (domainchat.Conversation, error) {
+	conversation, recipients, changed, err := service.repository.DecideConversation(
+		ctx, userID, conversationID, accept,
+	)
+	if err != nil {
+		return domainchat.Conversation{}, err
+	}
+	if conversation.Status == domainchat.ConversationAccepted {
+		conversation.OtherOnline = service.publisher.IsOnline(conversation.OtherUserID)
+	}
+	if changed {
+		service.publishConversation(recipients, conversation)
+	}
+	return conversation, nil
 }
 
 func (service *Service) ListConversations(
@@ -54,7 +81,20 @@ func (service *Service) ListConversations(
 	if len([]rune(query)) > 100 {
 		return domainchat.ConversationPage{}, domainchat.ErrInvalidMessage
 	}
-	return service.repository.ListConversations(ctx, userID, query, normalizedLimit(limit), cursor)
+	page, err := service.repository.ListConversations(
+		ctx, userID, query, normalizedLimit(limit), cursor,
+	)
+	if err == nil {
+		for index := range page.Conversations {
+			conversation := &page.Conversations[index]
+			if conversation.Status == domainchat.ConversationAccepted {
+				conversation.OtherOnline = service.publisher.IsOnline(conversation.OtherUserID)
+			} else {
+				conversation.OtherLastSeenAt = nil
+			}
+		}
+	}
+	return page, err
 }
 
 func (service *Service) ListMessages(
@@ -74,8 +114,10 @@ func (service *Service) Send(
 	message domainchat.SendMessage,
 ) (domainchat.Message, error) {
 	message.Content = strings.TrimSpace(message.Content)
-	if _, err := uuid.Parse(message.ClientID); err != nil ||
-		len(message.Content) == 0 || len([]rune(message.Content)) > 4000 {
+	if message.Kind == "" {
+		message.Kind = domainchat.MessageText
+	}
+	if _, err := uuid.Parse(message.ClientID); err != nil || !validMessagePayload(message) {
 		return domainchat.Message{}, domainchat.ErrInvalidMessage
 	}
 	persisted, recipients, created, err := service.repository.CreateMessage(ctx, userID, message)
@@ -83,7 +125,7 @@ func (service *Service) Send(
 		return domainchat.Message{}, err
 	}
 	if created {
-		event := ports.RealtimeEvent{Type: EventMessageNew, Data: persisted}
+		event := ports.RealtimeEvent{Type: domainchat.EventMessageNew, Data: persisted}
 		for _, recipient := range recipients {
 			connections := service.publisher.Publish(recipient, event)
 			if connections == 0 && service.notifier != nil {
@@ -92,6 +134,55 @@ func (service *Service) Send(
 		}
 	}
 	return persisted, nil
+}
+
+func validMessagePayload(message domainchat.SendMessage) bool {
+	switch message.Kind {
+	case domainchat.MessageText:
+		return len(message.Content) > 0 && len([]rune(message.Content)) <= 4000 && message.MediaID == ""
+	case domainchat.MessageVoice:
+		_, err := uuid.Parse(message.MediaID)
+		return err == nil && message.Content == ""
+	default:
+		return false
+	}
+}
+
+func (service *Service) Edit(
+	ctx context.Context,
+	userID string,
+	mutation domainchat.MessageMutation,
+) (domainchat.Message, error) {
+	mutation.Content = strings.TrimSpace(mutation.Content)
+	if err := validateMutation(mutation, true); err != nil {
+		return domainchat.Message{}, err
+	}
+	message, recipients, changed, err := service.repository.EditMessage(ctx, userID, mutation)
+	if err != nil {
+		return domainchat.Message{}, err
+	}
+	if changed {
+		service.publishMessage(domainchat.EventMessageUpdated, recipients, message)
+	}
+	return message, nil
+}
+
+func (service *Service) Delete(
+	ctx context.Context,
+	userID string,
+	mutation domainchat.MessageMutation,
+) (domainchat.Message, error) {
+	if err := validateMutation(mutation, false); err != nil {
+		return domainchat.Message{}, err
+	}
+	message, recipients, changed, err := service.repository.DeleteMessage(ctx, userID, mutation)
+	if err != nil {
+		return domainchat.Message{}, err
+	}
+	if changed {
+		service.publishMessage(domainchat.EventMessageDeleted, recipients, message)
+	}
+	return message, nil
 }
 
 func (service *Service) Delivered(
@@ -103,7 +194,7 @@ func (service *Service) Delivered(
 	if err != nil {
 		return err
 	}
-	service.publishReceipt(EventMessageDelivered, recipients, domainchat.Receipt{
+	service.publishReceipt(domainchat.EventMessageDelivered, recipients, domainchat.Receipt{
 		ConversationID: conversationID, UserID: userID, UpToSequence: sequence,
 	})
 	return nil
@@ -118,7 +209,7 @@ func (service *Service) Read(
 	if err != nil {
 		return err
 	}
-	service.publishReceipt(EventMessageRead, recipients, domainchat.Receipt{
+	service.publishReceipt(domainchat.EventMessageRead, recipients, domainchat.Receipt{
 		ConversationID: conversationID, UserID: userID, UpToSequence: sequence,
 	})
 	return nil
@@ -133,9 +224,9 @@ func (service *Service) Typing(
 	if err != nil {
 		return err
 	}
-	eventType := EventTypingStop
+	eventType := domainchat.EventTypingStop
 	if started {
-		eventType = EventTypingStart
+		eventType = domainchat.EventTypingStart
 	}
 	for _, recipient := range recipients {
 		service.publisher.Publish(recipient, ports.RealtimeEvent{
@@ -146,14 +237,47 @@ func (service *Service) Typing(
 	return nil
 }
 
+func (service *Service) RelayCall(
+	ctx context.Context,
+	userID, eventType string,
+	signal domainchat.CallSignal,
+) error {
+	if err := validateCallSignal(eventType, signal); err != nil {
+		return err
+	}
+	recipients, err := service.repository.ConversationRecipients(
+		ctx, userID, signal.ConversationID,
+	)
+	if err != nil {
+		return err
+	}
+	signal.FromUserID = userID
+	delivered := 0
+	for _, recipient := range recipients {
+		delivered += service.publisher.Publish(recipient, ports.RealtimeEvent{
+			Type: eventType,
+			Data: signal,
+		})
+	}
+	if eventType == domainchat.EventCallInvite && delivered == 0 {
+		return domainchat.ErrRecipientOffline
+	}
+	return nil
+}
+
 func (service *Service) SessionConnected(ctx context.Context, userID string) error {
-	peers, err := service.repository.UserPeers(ctx, userID)
+	if _, err := service.repository.UpdateLastSeen(ctx, userID); err != nil {
+		return err
+	}
+	peers, err := service.repository.UserPeerPresences(ctx, userID)
 	if err != nil {
 		return err
 	}
 	for _, peer := range peers {
-		service.publisher.Publish(peer, presenceEvent(userID, true))
-		service.publisher.Publish(userID, presenceEvent(peer, service.publisher.IsOnline(peer)))
+		service.publisher.Publish(peer.UserID, presenceEvent(userID, true, nil))
+		service.publisher.Publish(userID, presenceEvent(
+			peer.UserID, service.publisher.IsOnline(peer.UserID), peer.LastSeenAt,
+		))
 	}
 	return nil
 }
@@ -162,20 +286,34 @@ func (service *Service) SessionDisconnected(ctx context.Context, userID string) 
 	if service.publisher.IsOnline(userID) {
 		return nil
 	}
-	peers, err := service.repository.UserPeers(ctx, userID)
+	lastSeenAt, err := service.repository.UpdateLastSeen(ctx, userID)
+	if err != nil {
+		return err
+	}
+	peers, err := service.repository.UserPeerPresences(ctx, userID)
 	if err != nil {
 		return err
 	}
 	for _, peer := range peers {
-		service.publisher.Publish(peer, presenceEvent(userID, false))
+		service.publisher.Publish(peer.UserID, presenceEvent(userID, false, &lastSeenAt))
 	}
 	return nil
 }
 
-func presenceEvent(userID string, online bool) ports.RealtimeEvent {
-	return ports.RealtimeEvent{Type: "presence.changed", Data: map[string]any{
-		"user_id": userID, "online": online,
+func presenceEvent(userID string, online bool, lastSeenAt *time.Time) ports.RealtimeEvent {
+	return ports.RealtimeEvent{Type: domainchat.EventPresenceChanged, Data: domainchat.Presence{
+		UserID: userID, Online: online, LastSeenAt: lastSeenAt,
 	}}
+}
+
+func (service *Service) publishMessage(
+	eventType string,
+	recipients []string,
+	message domainchat.Message,
+) {
+	for _, recipient := range recipients {
+		service.publisher.Publish(recipient, ports.RealtimeEvent{Type: eventType, Data: message})
+	}
 }
 
 func (service *Service) publishReceipt(
@@ -188,11 +326,32 @@ func (service *Service) publishReceipt(
 	}
 }
 
+func (service *Service) publishConversation(
+	recipients []string,
+	conversation domainchat.Conversation,
+) {
+	for _, recipient := range recipients {
+		service.publisher.Publish(recipient, ports.RealtimeEvent{
+			Type: domainchat.EventConversationUpdated,
+			Data: map[string]any{"conversation_id": conversation.ID},
+		})
+	}
+}
+
 func (service *Service) notifyOffline(userID, conversationID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
 	defer cancel()
 	if err := service.notifier.NotifyNewMessage(ctx, userID, conversationID); err != nil {
 		slog.Warn("chat push failed", "user_id", userID, "conversation_id", conversationID, "error", err)
+	}
+}
+
+func (service *Service) notifyConversationRequest(userID, conversationID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
+	defer cancel()
+	if err := service.notifier.NotifyConversationRequest(ctx, userID, conversationID); err != nil {
+		slog.Warn("conversation request push failed", "user_id", userID,
+			"conversation_id", conversationID, "error", err)
 	}
 }
 
@@ -209,6 +368,52 @@ func normalizedLimit(limit int) int {
 func validateSequence(sequence int64) error {
 	if sequence < 1 {
 		return fmt.Errorf("sequence must be positive: %w", domainchat.ErrInvalidMessage)
+	}
+	return nil
+}
+
+func validateMutation(mutation domainchat.MessageMutation, contentRequired bool) error {
+	if _, err := uuid.Parse(mutation.OperationID); err != nil {
+		return domainchat.ErrInvalidMessage
+	}
+	if _, err := uuid.Parse(mutation.MessageID); err != nil {
+		return domainchat.ErrInvalidMessage
+	}
+	length := len([]rune(mutation.Content))
+	if contentRequired && (length == 0 || length > 4000) {
+		return domainchat.ErrInvalidMessage
+	}
+	return nil
+}
+
+func validateCallSignal(eventType string, signal domainchat.CallSignal) error {
+	if !domainchat.IsCallEvent(eventType) {
+		return domainchat.ErrInvalidCall
+	}
+	if _, err := uuid.Parse(signal.CallID); err != nil {
+		return domainchat.ErrInvalidCall
+	}
+	if _, err := uuid.Parse(signal.ConversationID); err != nil {
+		return domainchat.ErrInvalidCall
+	}
+	switch eventType {
+	case domainchat.EventCallInvite:
+		if signal.MediaType != domainchat.CallMediaAudio && signal.MediaType != domainchat.CallMediaVideo {
+			return domainchat.ErrInvalidCall
+		}
+	case domainchat.EventCallOffer:
+		if signal.SDPType != "offer" || len(signal.SDP) == 0 || len(signal.SDP) > 64<<10 {
+			return domainchat.ErrInvalidCall
+		}
+	case domainchat.EventCallAnswer:
+		if signal.SDPType != "answer" || len(signal.SDP) == 0 || len(signal.SDP) > 64<<10 {
+			return domainchat.ErrInvalidCall
+		}
+	case domainchat.EventCallICE:
+		if len(signal.Candidate) == 0 || len(signal.Candidate) > 8<<10 ||
+			signal.SDPMLineIndex == nil || *signal.SDPMLineIndex < 0 {
+			return domainchat.ErrInvalidCall
+		}
 	}
 	return nil
 }

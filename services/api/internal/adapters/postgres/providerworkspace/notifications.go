@@ -13,7 +13,7 @@ func (repository *Repository) ListNotifications(
 	limit int,
 ) ([]providers.WorkspaceNotification, error) {
 	rows, err := repository.pool.Query(ctx, `
-		SELECT id::text, title, body, read_at IS NOT NULL, created_at
+		SELECT id::text, title, body, kind, data, read_at IS NOT NULL, created_at
 		FROM notifications
 		WHERE firebase_uid = $1
 		ORDER BY created_at DESC
@@ -28,6 +28,7 @@ func (repository *Repository) ListNotifications(
 		var notification providers.WorkspaceNotification
 		if err := rows.Scan(
 			&notification.ID, &notification.Title, &notification.Body,
+			&notification.Kind, &notification.Data,
 			&notification.Read, &notification.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan provider notification: %w", err)

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/design_system/components/app_brand.dart';
 import '../../../../core/design_system/components/app_button.dart';
 import '../../../../core/design_system/foundations/app_colors.dart';
-import '../../../home/presentation/widgets/home_nav_bar.dart';
 import '../../domain/entities/provider_service.dart';
 import '../../domain/entities/provider_workspace.dart';
 import 'provider_alert_card.dart';
@@ -15,7 +14,6 @@ import 'provider_welcome_card.dart';
 class ProviderDashboardView extends StatelessWidget {
   const ProviderDashboardView({
     required this.workspace,
-    required this.chatUnreadCount,
     required this.onRefresh,
     required this.onAvailabilityChanged,
     required this.onAlert,
@@ -23,14 +21,16 @@ class ProviderDashboardView extends StatelessWidget {
     required this.onEditService,
     required this.onPublishedChanged,
     required this.onDeleteService,
-    required this.onConversations,
     required this.onAccount,
     required this.onNotifications,
+    required this.onSchedule,
+    required this.onAgenda,
+    this.onRequests,
+    this.onRequest,
     super.key,
   });
 
   final ProviderWorkspace workspace;
-  final int chatUnreadCount;
   final Future<void> Function() onRefresh;
   final ValueChanged<bool> onAvailabilityChanged;
   final ValueChanged<ProviderAlert> onAlert;
@@ -38,9 +38,12 @@ class ProviderDashboardView extends StatelessWidget {
   final ValueChanged<ProviderService> onEditService;
   final void Function(ProviderService, bool) onPublishedChanged;
   final ValueChanged<ProviderService> onDeleteService;
-  final VoidCallback onConversations;
   final VoidCallback onAccount;
   final VoidCallback onNotifications;
+  final VoidCallback onSchedule;
+  final VoidCallback onAgenda;
+  final VoidCallback? onRequests;
+  final ValueChanged<ProviderRequest>? onRequest;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -100,6 +103,20 @@ class ProviderDashboardView extends StatelessWidget {
                 ],
                 const SizedBox(height: 16),
                 ProviderSummaryGrid(summary: workspace.summary),
+                const SizedBox(height: 18),
+                _ScheduleCard(
+                  icon: Icons.today_outlined,
+                  title: 'Minha agenda',
+                  subtitle: 'Veja os atendimentos da semana',
+                  onTap: onAgenda,
+                ),
+                const SizedBox(height: 10),
+                _ScheduleCard(
+                  icon: Icons.schedule_outlined,
+                  title: 'Horários e disponibilidade',
+                  subtitle: 'Defina jornada, intervalos e bloqueios',
+                  onTap: onSchedule,
+                ),
                 const SizedBox(height: 22),
                 AppButton(
                   key: const Key('provider_create_service_button'),
@@ -116,17 +133,74 @@ class ProviderDashboardView extends StatelessWidget {
                   onDelete: onDeleteService,
                 ),
                 const SizedBox(height: 28),
-                ProviderRequestsSection(requests: workspace.recentRequests),
+                ProviderRequestsSection(
+                  requests: workspace.recentRequests,
+                  onRequest: onRequest ?? (_) {},
+                  onViewAll: onRequests ?? () {},
+                ),
               ],
             ),
           ),
         ),
       ),
     ),
-    bottomNavigationBar: HomeNavBar(
-      chatUnreadCount: chatUnreadCount,
-      onConversationsTap: onConversations,
-      onAccountTap: onAccount,
+  );
+}
+
+class _ScheduleCard extends StatelessWidget {
+  const _ScheduleCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.surface,
+    borderRadius: BorderRadius.circular(16),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: AppColors.primarySoft,
+              child: Icon(icon, color: AppColors.primary),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textSecondary,
+            ),
+          ],
+        ),
+      ),
     ),
   );
 }

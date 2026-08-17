@@ -23,7 +23,7 @@ class ServiceOfferModel {
       ServiceOfferModel(
         id: JsonReader.string(json, 'id'),
         title: JsonReader.string(json, 'title'),
-        categoryId: JsonReader.string(json, 'category_id'),
+        categoryId: JsonReader.optionalString(json, 'category_id') ?? '',
         rating: JsonReader.decimal(json, 'rating'),
         reviews: JsonReader.integer(json, 'reviews'),
         durationMinutes: JsonReader.integer(json, 'duration_minutes'),

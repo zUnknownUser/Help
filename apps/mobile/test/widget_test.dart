@@ -7,6 +7,7 @@ import 'package:help/features/home/presentation/controllers/home_controller.dart
 import 'package:help/features/home/presentation/pages/home_page.dart';
 import 'package:help/features/home/presentation/providers/home_providers.dart';
 import 'package:help/features/chat/presentation/providers/chat_providers.dart';
+import 'package:help/features/main_navigation/presentation/main_shell.dart';
 
 import 'features/home/fixtures/home_content_fixture.dart';
 
@@ -26,7 +27,12 @@ void main() {
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
-          home: const HomePage(),
+          home: MainShell(
+            homeBuilder: (select) => HomePage(onTabSelected: select),
+            requestsPage: const SizedBox.shrink(),
+            conversationsPage: const SizedBox.shrink(),
+            accountPage: const SizedBox.shrink(),
+          ),
         ),
       ),
     );

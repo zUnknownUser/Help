@@ -28,6 +28,15 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Usamos sua localização para mostrar serviços disponíveis perto de você.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Usamos o microfone para mensagens de voz e chamadas.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Usamos a camera durante chamadas de video.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

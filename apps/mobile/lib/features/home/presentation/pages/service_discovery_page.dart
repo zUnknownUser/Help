@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/design_system/foundations/app_colors.dart';
+import '../../../../core/design_system/components/app_loading.dart';
 import '../../domain/entities/catalog_query.dart';
 import '../../domain/entities/service_offer.dart';
 import '../../data/providers/home_data_providers.dart';
 import '../widgets/service_card.dart';
+import '../../../service_details/presentation/pages/service_details_page.dart';
 
 class ServiceDiscoveryPage extends ConsumerStatefulWidget {
   const ServiceDiscoveryPage({
@@ -82,7 +84,7 @@ class _ServiceDiscoveryPageState extends ConsumerState<ServiceDiscoveryPage> {
 
   Widget _body() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      return const AppLoadingView(message: 'Buscando serviços…');
     }
     if (_error != null && _items.isEmpty) {
       return Center(
@@ -115,8 +117,19 @@ class _ServiceDiscoveryPageState extends ConsumerState<ServiceDiscoveryPage> {
         mainAxisSpacing: 12,
       ),
       itemBuilder: (_, index) => index == _items.length
-          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
-          : ServiceCard(key: ValueKey(_items[index].id), offer: _items[index]),
+          ? const Center(child: AppProgressIndicator())
+          : ServiceCard(
+              key: ValueKey(_items[index].id),
+              offer: _items[index],
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute(
+                  builder: (_) => ServiceDetailsPage(
+                    serviceId: _items[index].id,
+                    preview: _items[index],
+                  ),
+                ),
+              ),
+            ),
     );
   }
 

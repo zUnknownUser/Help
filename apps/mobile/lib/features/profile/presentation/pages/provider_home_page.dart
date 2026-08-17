@@ -8,19 +8,24 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/user_profile.dart';
 import '../providers/profile_providers.dart';
 import '../../domain/entities/user_role.dart';
-import '../../../chat/presentation/pages/chat_list_page.dart';
 import '../../../chat/presentation/providers/chat_providers.dart';
+import '../../../main_navigation/presentation/main_tab.dart';
 import '../../../provider/presentation/pages/provider_dashboard_page.dart';
 
 class ProviderHomePage extends ConsumerWidget {
-  const ProviderHomePage({required this.profile, super.key});
+  const ProviderHomePage({
+    required this.profile,
+    required this.onTabSelected,
+    super.key,
+  });
 
   final UserProfile profile;
+  final ValueChanged<MainTab> onTabSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (profile.providerStatus == ProviderOnboardingStatus.approved) {
-      return const ProviderDashboardPage();
+      return ProviderDashboardPage(onTabSelected: onTabSelected);
     }
     final content = _contentFor(profile.providerStatus);
     final roleState = ref.watch(profileRoleControllerProvider);
@@ -33,9 +38,7 @@ class ProviderHomePage extends ConsumerWidget {
         actions: [
           IconButton(
             tooltip: 'Conversas',
-            onPressed: () => Navigator.of(context).push<void>(
-              MaterialPageRoute(builder: (_) => const ChatListPage()),
-            ),
+            onPressed: () => onTabSelected(MainTab.conversations),
             icon: Badge(
               isLabelVisible: unreadChat > 0,
               label: Text(unreadChat > 99 ? '99+' : '$unreadChat'),

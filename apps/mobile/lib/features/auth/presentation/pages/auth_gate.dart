@@ -3,18 +3,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/design_system/components/app_brand.dart';
 import '../../../../core/design_system/components/app_button.dart';
+import '../../../../core/design_system/components/app_loading.dart';
 import '../../../../core/design_system/foundations/app_colors.dart';
 import '../../../profile/presentation/pages/profile_gate.dart';
 import '../providers/auth_providers.dart';
 import 'login_page.dart';
 import 'email_verification_page.dart';
 
-class AuthGate extends ConsumerWidget {
+class AuthGate extends ConsumerStatefulWidget {
   const AuthGate({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends ConsumerState<AuthGate> {
+  bool _hadAuthenticatedSession = false;
+
+  @override
+  Widget build(BuildContext context) {
     final session = ref.watch(authStateProvider);
+    if (session.hasValue && session.value != null) {
+      _hadAuthenticatedSession = true;
+    }
+    ref.listen(authStateProvider, (_, next) {
+      if (!next.hasValue) return;
+      if (next.value != null) {
+        _hadAuthenticatedSession = true;
+        return;
+      }
+      if (!_hadAuthenticatedSession) return;
+      _hadAuthenticatedSession = false;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      });
+    });
     return session.when(
       data: (user) {
         if (user == null) return const LoginPage();
@@ -36,19 +61,7 @@ class _AuthLoadingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: AppColors.surface,
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppBrand(),
-            SizedBox(height: 22),
-            SizedBox.square(
-              dimension: 22,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ],
-        ),
-      ),
+      body: AppLoadingView(message: 'Preparando o Help…'),
     );
   }
 }

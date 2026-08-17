@@ -50,7 +50,8 @@ func newProviderHomeResponse(workspace providers.Workspace) map[string]any {
 	for _, notification := range workspace.Notifications {
 		notifications = append(notifications, map[string]any{
 			"id": notification.ID, "title": notification.Title,
-			"body": notification.Body, "read": notification.Read,
+			"body": notification.Body, "kind": notification.Kind,
+			"data": notification.Data, "read": notification.Read,
 			"created_at": notification.CreatedAt.UTC().Format(time.RFC3339),
 		})
 	}
@@ -92,6 +93,7 @@ func newProviderRequestResponse(request providers.ServiceRequest) map[string]any
 		"id": request.ID, "service_id": request.ServiceID,
 		"service_title": request.ServiceTitle, "customer_name": request.CustomerName,
 		"status": request.Status, "note": request.Note,
+		"quoted_price_cents": request.QuotedPriceCents, "address": request.Address,
 		"created_at": request.CreatedAt.UTC().Format(time.RFC3339),
 	}
 	if request.ScheduledFor != nil {

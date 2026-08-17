@@ -22,7 +22,7 @@ func (r *Repository) ListRecommended(ctx context.Context) ([]domaincatalog.Servi
 		FROM services service
 		JOIN providers provider ON provider.id = service.provider_id
 		  AND provider.active AND provider.accepting_requests
-		  AND provider.onboarding_status = 'approved'
+		  AND provider.onboarding_status = 'approved' AND provider.owner_uid IS NOT NULL
 		WHERE service.active AND service.deleted_at IS NULL
 		  AND service.featured_position IS NOT NULL
 		ORDER BY service.featured_position

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../foundations/app_colors.dart';
 import '../foundations/app_radius.dart';
+import 'app_loading.dart';
 
 enum AppButtonVariant { primary, outlined, disabled }
 
@@ -60,12 +61,10 @@ class AppButton extends StatelessWidget {
           ),
         ),
         child: isLoading
-            ? SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: foreground,
-                ),
+            ? AppProgressIndicator(
+                size: 20,
+                color: foreground,
+                semanticsLabel: '$label em andamento',
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,

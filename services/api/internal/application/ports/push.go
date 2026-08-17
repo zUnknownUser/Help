@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/vendlydigital/help/services/api/internal/domain/devices"
 )
@@ -15,8 +16,32 @@ type DeviceRepository interface {
 
 type NotificationRepository interface {
 	CreateChatNotification(context.Context, string, string) error
+	CreateConversationRequestNotification(context.Context, string, string) error
+}
+
+type PushNotification struct {
+	Title string
+	Body  string
+	Data  map[string]string
+}
+
+type PushDelivery struct {
+	NotificationID string
+	UserID         string
+	Attempts       int
+	Message        PushNotification
+}
+
+type PushOutboxRepository interface {
+	Claim(context.Context, int) ([]PushDelivery, error)
+	MarkDelivered(context.Context, string) error
+	Reschedule(context.Context, string, time.Time, string) error
 }
 
 type PushSender interface {
-	SendNewMessage(context.Context, []string, string) ([]string, error)
+	Send(context.Context, []string, PushNotification) ([]string, error)
+}
+
+type ServiceRequestReminderRepository interface {
+	EnqueueDueReminders(context.Context, time.Time, int) (int, error)
 }

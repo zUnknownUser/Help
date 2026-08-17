@@ -12,7 +12,7 @@ import (
 const (
 	writeTimeout = 5 * time.Second
 	pingInterval = 25 * time.Second
-	maxEventSize = 16 << 10
+	maxEventSize = 96 << 10
 	queueSize    = 256
 )
 

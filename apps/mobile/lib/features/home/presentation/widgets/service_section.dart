@@ -5,10 +5,16 @@ import 'section_title.dart';
 import 'service_card.dart';
 
 class ServiceSection extends StatelessWidget {
-  const ServiceSection({required this.title, required this.offers, super.key});
+  const ServiceSection({
+    required this.title,
+    required this.offers,
+    required this.onOfferTap,
+    super.key,
+  });
 
   final String title;
   final List<ServiceOffer> offers;
+  final ValueChanged<ServiceOffer> onOfferTap;
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +32,10 @@ class ServiceSection extends StatelessWidget {
             physics: const BouncingScrollPhysics(),
             itemCount: offers.length,
             separatorBuilder: (_, _) => const SizedBox(width: 11),
-            itemBuilder: (context, index) => ServiceCard(offer: offers[index]),
+            itemBuilder: (context, index) => ServiceCard(
+              offer: offers[index],
+              onTap: () => onOfferTap(offers[index]),
+            ),
           ),
         ),
       ],

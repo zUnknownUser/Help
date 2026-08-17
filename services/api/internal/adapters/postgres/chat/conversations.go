@@ -24,7 +24,8 @@ func (repository *Repository) ListConversations(
 		cursorTime, cursorID = &cursor.UpdatedAt, &cursor.ID
 	}
 	rows, err := repository.pool.Query(ctx, `
-		SELECT c.id::text, other.firebase_uid, profile.display_name,
+		SELECT c.id::text, other.firebase_uid, profile.display_name, profile.last_seen_at,
+		       c.status, c.requested_by = $1,
 		       member.last_read_sequence, c.last_sequence,
 		       (SELECT count(*) FROM chat_messages unread
 		        WHERE unread.conversation_id = c.id
@@ -32,7 +33,9 @@ func (repository *Repository) ListConversations(
 		          AND unread.sequence > member.last_read_sequence),
 		       c.updated_at,
 		       message.id::text, message.client_id::text, message.sender_uid,
-		       message.content, message.sequence, message.created_at,
+		       message.content, message.kind, media.id::text, media.content_type,
+		       media.byte_size, media.duration_ms, message.sequence, message.created_at,
+		       message.edited_at, message.deleted_at, message.version,
 		       CASE
 		         WHEN message.id IS NULL THEN NULL
 		         WHEN NOT EXISTS (
@@ -59,6 +62,7 @@ func (repository *Repository) ListConversations(
 		  WHERE m.conversation_id = c.id
 		  ORDER BY m.sequence DESC LIMIT 1
 		) message ON true
+		LEFT JOIN chat_media_assets media ON media.id=message.media_id
 		WHERE member.firebase_uid = $1
 		  AND ($2 = '' OR profile.display_name ILIKE '%' || $2 || '%')
 		  AND ($3::timestamptz IS NULL OR (c.updated_at, c.id) < ($3, $4::uuid))
@@ -93,14 +97,22 @@ type rowScanner interface{ Scan(...any) error }
 
 func scanConversation(row rowScanner) (domainchat.Conversation, error) {
 	var conversation domainchat.Conversation
-	var messageID, clientID, senderID, content, status *string
+	var messageID, clientID, senderID, content, kind, status *string
+	var mediaID, mediaContentType *string
+	var mediaByteSize *int64
+	var mediaDurationMS *int
 	var sequence *int64
-	var createdAt *time.Time
+	var createdAt, editedAt, deletedAt *time.Time
+	var version *int
 	err := row.Scan(
 		&conversation.ID, &conversation.OtherUserID, &conversation.OtherDisplayName,
+		&conversation.OtherLastSeenAt, &conversation.Status, &conversation.RequestedByMe,
 		&conversation.LastReadSequence, &conversation.LastMessageSequence,
 		&conversation.UnreadCount, &conversation.UpdatedAt,
-		&messageID, &clientID, &senderID, &content, &sequence, &createdAt, &status,
+		&messageID, &clientID, &senderID, &content, &kind,
+		&mediaID, &mediaContentType, &mediaByteSize, &mediaDurationMS,
+		&sequence, &createdAt,
+		&editedAt, &deletedAt, &version, &status,
 	)
 	if err != nil {
 		return domainchat.Conversation{}, fmt.Errorf("scan conversation: %w", err)
@@ -109,7 +121,15 @@ func scanConversation(row rowScanner) (domainchat.Conversation, error) {
 		conversation.LastMessage = &domainchat.Message{
 			ID: *messageID, ClientID: *clientID, ConversationID: conversation.ID,
 			SenderUID: *senderID, Content: *content, Sequence: *sequence,
-			CreatedAt: *createdAt, Status: domainchat.MessageStatus(*status),
+			CreatedAt: *createdAt, EditedAt: editedAt, DeletedAt: deletedAt,
+			Kind: domainchat.MessageKind(*kind), Version: *version,
+			Status: domainchat.MessageStatus(*status),
+		}
+		if mediaID != nil {
+			conversation.LastMessage.Media = &domainchat.Media{
+				ID: *mediaID, ContentType: *mediaContentType,
+				ByteSize: *mediaByteSize, DurationMS: *mediaDurationMS,
+			}
 		}
 	}
 	return conversation, nil

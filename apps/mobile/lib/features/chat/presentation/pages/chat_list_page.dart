@@ -3,12 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/design_system/components/app_loading.dart';
 import '../../../../core/design_system/foundations/app_colors.dart';
 import '../../data/providers/chat_data_providers.dart';
+import '../../data/realtime/chat_realtime_coordinator.dart';
 import '../../domain/entities/chat_conversation.dart';
 import '../providers/chat_providers.dart';
-import '../widgets/chat_avatar.dart';
-import '../widgets/message_status_icon.dart';
+import '../widgets/chat_contact_sheet.dart';
+import '../widgets/conversation_tile.dart';
+import '../widgets/conversation_list_chrome.dart';
 import 'chat_page.dart';
 import 'new_conversation_page.dart';
 
@@ -23,7 +26,9 @@ class _ChatListPageState extends ConsumerState<ChatListPage> {
   final _search = TextEditingController();
   final _scroll = ScrollController();
   String _query = '';
+  String? _decidingId;
   Timer? _debounce;
+  ConversationFilter _filter = ConversationFilter.all;
 
   @override
   void initState() {
@@ -42,9 +47,21 @@ class _ChatListPageState extends ConsumerState<ChatListPage> {
   @override
   Widget build(BuildContext context) {
     final conversations = ref.watch(conversationsProvider(_query));
+    final connection =
+        ref.watch(realtimeConnectionProvider).value ??
+        RealtimeConnectionStatus.disconnected;
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Conversas')),
+      appBar: AppBar(
+        title: const Text('Conversas'),
+        actions: [
+          IconButton(
+            tooltip: 'Nova conversa',
+            onPressed: _newConversation,
+            icon: const Icon(Icons.add_comment_outlined),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Nova conversa',
         onPressed: _newConversation,
@@ -52,47 +69,19 @@ class _ChatListPageState extends ConsumerState<ChatListPage> {
       ),
       body: Column(
         children: [
-          Container(
-            color: AppColors.surface,
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
-            child: TextField(
-              controller: _search,
-              onChanged: (value) {
-                _debounce?.cancel();
-                _debounce = Timer(const Duration(milliseconds: 250), () {
-                  if (!mounted) return;
-                  setState(() => _query = value.trim());
-                  unawaited(
-                    ref
-                        .read(chatRealtimeCoordinatorProvider)
-                        .loadMoreConversations(query: _query, reset: true),
-                  );
-                });
-              },
-              decoration: const InputDecoration(
-                hintText: 'Buscar conversas',
-                prefixIcon: Icon(Icons.search_rounded),
-              ),
-            ),
+          ConversationListToolbar(
+            controller: _search,
+            selected: _filter,
+            onQueryChanged: _onSearch,
+            onFilterChanged: (filter) => setState(() => _filter = filter),
           ),
+          if (connection != RealtimeConnectionStatus.connected)
+            ChatConnectionBanner(status: connection),
           Expanded(
             child: conversations.when(
-              data: (items) => items.isEmpty
-                  ? const _EmptyConversations()
-                  : ListView.separated(
-                      controller: _scroll,
-                      itemCount: items.length,
-                      separatorBuilder: (_, _) =>
-                          const Divider(height: 1, indent: 76),
-                      itemBuilder: (_, index) => _ConversationTile(
-                        conversation: items[index],
-                        currentUserId: ref.read(currentChatUserIdProvider),
-                        onTap: () => _open(items[index]),
-                      ),
-                    ),
-              loading: () => const Center(
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              data: (items) => _conversationList(_applyFilter(items)),
+              loading: () =>
+                  const AppLoadingView(message: 'Abrindo conversas…'),
               error: (_, _) => const Center(
                 child: Text('Não foi possível abrir as conversas.'),
               ),
@@ -103,10 +92,79 @@ class _ChatListPageState extends ConsumerState<ChatListPage> {
     );
   }
 
-  void _loadNextPage() {
-    if (!_scroll.hasClients || _scroll.position.extentAfter > 500) {
-      return;
+  Widget _conversationList(List<ChatConversation> items) {
+    if (items.isEmpty) {
+      return EmptyConversationsView(
+        filtered: _query.isNotEmpty || _filter != ConversationFilter.all,
+      );
     }
+    final currentUserId = ref.read(currentChatUserIdProvider);
+    return RefreshIndicator(
+      onRefresh: () => ref
+          .read(chatRealtimeCoordinatorProvider)
+          .loadMoreConversations(query: _query, reset: true),
+      child: ListView.separated(
+        controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 92),
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
+        itemBuilder: (_, index) {
+          final conversation = items[index];
+          return RepaintBoundary(
+            key: ValueKey(conversation.id),
+            child: ConversationTile(
+              conversation: conversation,
+              currentUserId: currentUserId,
+              deciding: _decidingId == conversation.id,
+              onTap: () => _open(conversation),
+              onAvatarTap: () => showChatContactSheet(
+                context,
+                conversation,
+                onOpenConversation: () => _open(conversation),
+              ),
+              onAccept: () => _decide(conversation, accept: true),
+              onDecline: () => _confirmDecline(conversation),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  List<ChatConversation> _applyFilter(List<ChatConversation> items) =>
+      switch (_filter) {
+        ConversationFilter.all => items,
+        ConversationFilter.unread =>
+          items
+              .where((conversation) => conversation.unreadCount > 0)
+              .toList(growable: false),
+        ConversationFilter.requests =>
+          items
+              .where(
+                (conversation) =>
+                    conversation.status == ChatConversationStatus.pending,
+              )
+              .toList(growable: false),
+      };
+
+  void _onSearch(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      setState(() => _query = value.trim());
+      unawaited(
+        ref
+            .read(chatRealtimeCoordinatorProvider)
+            .loadMoreConversations(query: _query, reset: true),
+      );
+    });
+  }
+
+  void _loadNextPage() {
+    if (!_scroll.hasClients || _scroll.position.extentAfter > 500) return;
     unawaited(
       ref
           .read(chatRealtimeCoordinatorProvider)
@@ -121,113 +179,52 @@ class _ChatListPageState extends ConsumerState<ChatListPage> {
     if (conversation != null && mounted) _open(conversation);
   }
 
-  void _open(ChatConversation conversation) => Navigator.of(context).push<void>(
-    MaterialPageRoute(builder: (_) => ChatPage(conversation: conversation)),
-  );
-}
-
-class _ConversationTile extends StatelessWidget {
-  const _ConversationTile({
-    required this.conversation,
-    required this.currentUserId,
-    required this.onTap,
-  });
-  final ChatConversation conversation;
-  final String currentUserId;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final last = conversation.lastMessage;
-    return ListTile(
-      tileColor: AppColors.surface,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-      leading: ChatAvatar(name: conversation.otherDisplayName),
-      title: Text(
-        conversation.otherDisplayName,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w800),
-      ),
-      subtitle: Row(
-        children: [
-          if (last?.senderId == currentUserId) ...[
-            MessageStatusIcon(status: last!.status, size: 13),
-            const SizedBox(width: 4),
-          ],
-          Expanded(
-            child: Text(
-              last?.content ?? 'Inicie a conversa',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+  Future<void> _decide(
+    ChatConversation conversation, {
+    required bool accept,
+  }) async {
+    setState(() => _decidingId = conversation.id);
+    try {
+      await ref
+          .read(chatRealtimeCoordinatorProvider)
+          .decideConversation(conversation.id, accept: accept);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível responder à solicitação.'),
           ),
-        ],
-      ),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            _time(last?.displayedAt ?? conversation.updatedAt),
-            style: const TextStyle(
-              fontSize: 10,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          if (conversation.unreadCount > 0)
-            Container(
-              constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                conversation.unreadCount > 99
-                    ? '99+'
-                    : '${conversation.unreadCount}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-        ],
-      ),
-      onTap: onTap,
-    );
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _decidingId = null);
+    }
   }
 
-  String _time(DateTime value) =>
-      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
-}
-
-class _EmptyConversations extends StatelessWidget {
-  const _EmptyConversations();
-  @override
-  Widget build(BuildContext context) => const Center(
-    child: Padding(
-      padding: EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.forum_outlined, size: 48, color: AppColors.primary),
-          SizedBox(height: 12),
-          Text(
-            'Nenhuma conversa ainda',
-            style: TextStyle(fontWeight: FontWeight.w800),
+  Future<void> _confirmDecline(ChatConversation conversation) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Recusar conversa?'),
+        content: Text(
+          '${conversation.otherDisplayName} não poderá enviar mensagens para você.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
           ),
-          SizedBox(height: 5),
-          Text(
-            'Toque no botão abaixo para conversar com outro usuário.',
-            textAlign: TextAlign.center,
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Recusar'),
           ),
         ],
       ),
-    ),
+    );
+    if (confirmed == true) await _decide(conversation, accept: false);
+  }
+
+  void _open(ChatConversation conversation) => Navigator.of(context).push<void>(
+    MaterialPageRoute(builder: (_) => ChatPage(conversation: conversation)),
   );
 }

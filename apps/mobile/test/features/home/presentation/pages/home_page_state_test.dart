@@ -9,6 +9,8 @@ import 'package:help/features/home/domain/failures/home_failure.dart';
 import 'package:help/features/home/presentation/controllers/home_controller.dart';
 import 'package:help/features/home/presentation/pages/home_page.dart';
 import 'package:help/features/home/presentation/providers/home_providers.dart';
+import 'package:help/features/chat/presentation/providers/chat_providers.dart';
+import 'package:help/features/main_navigation/presentation/main_shell.dart';
 
 class _LoadingHomeController extends HomeController {
   @override
@@ -45,8 +47,19 @@ void main() {
 Future<void> _pump(WidgetTester tester, HomeController Function() controller) {
   return tester.pumpWidget(
     ProviderScope(
-      overrides: [homeControllerProvider.overrideWith(controller)],
-      child: MaterialApp(theme: AppTheme.light, home: const HomePage()),
+      overrides: [
+        homeControllerProvider.overrideWith(controller),
+        unreadChatCountProvider.overrideWith((ref) => Stream.value(0)),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.light,
+        home: MainShell(
+          homeBuilder: (_) => const HomePage(),
+          requestsPage: const SizedBox(),
+          conversationsPage: const SizedBox(),
+          accountPage: const SizedBox(),
+        ),
+      ),
     ),
   );
 }

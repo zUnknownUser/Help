@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:help/core/design_system/components/app_loading.dart';
 import 'package:help/features/auth/domain/entities/auth_user.dart';
 import 'package:help/features/auth/domain/failures/auth_failure.dart';
 import 'package:help/features/auth/domain/use_cases/request_email_verification.dart';
@@ -15,6 +18,7 @@ import 'package:help/features/home/presentation/providers/home_providers.dart';
 import 'package:help/features/profile/domain/entities/user_profile.dart';
 import 'package:help/features/profile/domain/entities/user_role.dart';
 import 'package:help/features/profile/presentation/controllers/profile_controller.dart';
+import 'package:help/features/profile/presentation/pages/account_page.dart';
 import 'package:help/features/profile/presentation/providers/profile_providers.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -151,5 +155,73 @@ void main() {
 
     expect(attempts, 2);
     expect(find.text('Bem-vindo ao Help'), findsOneWidget);
+  });
+
+  testWidgets('remove rotas protegidas da pilha depois de sair da conta', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(480, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final session = StreamController<AuthUser?>();
+    final signOutCompletion = Completer<void>();
+    final navigatorKey = GlobalKey<NavigatorState>();
+    var signOutCalls = 0;
+    addTearDown(session.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authStateProvider.overrideWith((ref) => session.stream),
+          homeControllerProvider.overrideWith(_FixtureHomeController.new),
+          currentProfileProvider.overrideWith(
+            () => _FixtureProfileController(
+              const UserProfile(
+                email: 'user@email.com',
+                displayName: 'User',
+                activeRole: UserRole.customer,
+                roles: [UserRole.customer],
+              ),
+            ),
+          ),
+          sessionStarterProvider.overrideWithValue((_) {}),
+          unreadChatCountProvider.overrideWith((ref) => Stream.value(0)),
+          signOutProvider.overrideWithValue(() async {
+            signOutCalls++;
+            await signOutCompletion.future;
+            session.add(null);
+          }),
+        ],
+        child: MaterialApp(navigatorKey: navigatorKey, home: const AuthGate()),
+      ),
+    );
+    session.add(
+      const AuthUser(id: '1', email: 'user@email.com', emailVerified: true),
+    );
+    await tester.pumpAndSettle();
+
+    navigatorKey.currentState!.push<void>(
+      MaterialPageRoute(builder: (_) => const AccountPage()),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('customer_sign_out_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Sair'));
+    await tester.pump();
+
+    expect(find.byType(AppProgressIndicator), findsOneWidget);
+    expect(find.text('Conta'), findsOneWidget);
+
+    signOutCompletion.complete();
+    await tester.pumpAndSettle();
+
+    expect(signOutCalls, 1);
+    expect(find.text('Bem-vindo ao Help'), findsOneWidget);
+    expect(find.text('Conta'), findsNothing);
+    expect(navigatorKey.currentState!.canPop(), isFalse);
   });
 }

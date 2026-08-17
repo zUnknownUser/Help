@@ -29,6 +29,7 @@ func TestPublishedProviderServiceAppearsInCustomerCatalog(t *testing.T) {
 	providerUID := "provider-" + uuid.NewString()
 	otherUID := "provider-" + uuid.NewString()
 	categoryID := "category-" + uuid.NewString()
+	defer cleanupProviderTestData(pool, categoryID, providerUID, otherUID)
 	seedApprovedProvider(t, pool, providerUID, "Prestador integrado")
 	seedApprovedProvider(t, pool, otherUID, "Outro prestador")
 	if _, err := pool.Exec(ctx, `
@@ -51,7 +52,8 @@ func TestPublishedProviderServiceAppearsInCustomerCatalog(t *testing.T) {
 
 	latitude, longitude, radius := -3.0816211, -59.9779892, 30.0
 	page, err := postgrescatalog.NewRepository(pool).Search(ctx, catalog.Filters{
-		Latitude: &latitude, Longitude: &longitude, RadiusKM: &radius, Limit: 20,
+		Latitude: &latitude, Longitude: &longitude, RadiusKM: &radius,
+		CategoryID: categoryID, Limit: 20,
 	})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
@@ -67,11 +69,21 @@ func TestPublishedProviderServiceAppearsInCustomerCatalog(t *testing.T) {
 		t.Fatalf("DeleteService() error = %v", err)
 	}
 	page, err = postgrescatalog.NewRepository(pool).Search(ctx, catalog.Filters{
-		Latitude: &latitude, Longitude: &longitude, RadiusKM: &radius, Limit: 20,
+		Latitude: &latitude, Longitude: &longitude, RadiusKM: &radius,
+		CategoryID: categoryID, Limit: 20,
 	})
 	if err != nil || len(page.Items) != 0 {
 		t.Fatalf("catalog after delete = %+v, error = %v", page, err)
 	}
+}
+
+func cleanupProviderTestData(pool *pgxpool.Pool, categoryID string, providerUIDs ...string) {
+	ctx := context.Background()
+	pool.Exec(ctx, `DELETE FROM service_requests WHERE provider_id IN (SELECT id FROM providers WHERE owner_uid = ANY($1))`, providerUIDs)
+	pool.Exec(ctx, `DELETE FROM services WHERE provider_id IN (SELECT id FROM providers WHERE owner_uid = ANY($1))`, providerUIDs)
+	pool.Exec(ctx, `DELETE FROM providers WHERE owner_uid = ANY($1)`, providerUIDs)
+	pool.Exec(ctx, `DELETE FROM categories WHERE id = $1`, categoryID)
+	pool.Exec(ctx, `DELETE FROM user_profiles WHERE firebase_uid = ANY($1)`, providerUIDs)
 }
 
 func seedApprovedProvider(t *testing.T, pool *pgxpool.Pool, uid, name string) {

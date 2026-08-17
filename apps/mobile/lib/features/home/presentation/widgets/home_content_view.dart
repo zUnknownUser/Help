@@ -5,31 +5,31 @@ import '../../../../core/design_system/foundations/app_colors.dart';
 import '../../domain/entities/home_content.dart';
 import '../../domain/entities/promotion.dart';
 import '../../domain/entities/service_category.dart';
+import '../../domain/entities/service_offer.dart';
 import '../../domain/entities/catalog_query.dart';
 import '../pages/location_page.dart';
 import '../pages/notifications_page.dart';
 import '../pages/service_discovery_page.dart';
 import '../../../profile/presentation/pages/account_page.dart';
-import '../../../chat/presentation/pages/chat_list_page.dart';
-import '../../../chat/presentation/providers/chat_providers.dart';
+import '../../../main_navigation/presentation/main_tab.dart';
+import '../../../service_details/presentation/pages/service_details_page.dart';
 import '../providers/home_providers.dart';
 import 'benefits_strip.dart';
 import 'carousel_dots.dart';
 import 'category_grid.dart';
 import 'home_header.dart';
 import 'home_empty_state.dart';
-import 'home_nav_bar.dart';
 import 'promo_banner.dart';
 import 'service_section.dart';
 
 class HomeContentView extends ConsumerWidget {
-  const HomeContentView({required this.content, super.key});
+  const HomeContentView({required this.content, this.onTabSelected, super.key});
 
   final HomeContent content;
+  final ValueChanged<MainTab>? onTabSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final chatUnread = ref.watch(unreadChatCountProvider).value ?? 0;
     final hasDynamicContent =
         content.promotions.isNotEmpty ||
         content.categories.isNotEmpty ||
@@ -57,9 +57,7 @@ class HomeContentView extends ConsumerWidget {
                       content.recommendationsTitle,
                       CatalogQuery(location: content.location),
                     ),
-                    onAccountTap: () => Navigator.of(context).push<void>(
-                      MaterialPageRoute(builder: (_) => const AccountPage()),
-                    ),
+                    onAccountTap: () => _openAccount(context),
                   ),
                 ),
                 if (content.promotions.isNotEmpty) ...[
@@ -93,6 +91,7 @@ class HomeContentView extends ConsumerWidget {
                     child: ServiceSection(
                       title: content.recommendationsTitle,
                       offers: content.recommendedServices,
+                      onOfferTap: (offer) => _openDetails(context, offer),
                     ),
                   ),
                 if (content.benefits.isNotEmpty)
@@ -115,16 +114,18 @@ class HomeContentView extends ConsumerWidget {
           ),
         ),
       ),
-      bottomNavigationBar: HomeNavBar(
-        chatUnreadCount: chatUnread,
-        onConversationsTap: () => Navigator.of(
-          context,
-        ).push<void>(MaterialPageRoute(builder: (_) => const ChatListPage())),
-        onAccountTap: () => Navigator.of(
-          context,
-        ).push<void>(MaterialPageRoute(builder: (_) => const AccountPage())),
-      ),
     );
+  }
+
+  void _openAccount(BuildContext context) {
+    final select = onTabSelected;
+    if (select != null) {
+      select(MainTab.account);
+      return;
+    }
+    Navigator.of(
+      context,
+    ).push<void>(MaterialPageRoute(builder: (_) => const AccountPage()));
   }
 
   Future<void> _openLocation(BuildContext context, WidgetRef ref) async {
@@ -175,6 +176,14 @@ class HomeContentView extends ConsumerWidget {
           title: title.isEmpty ? 'Serviços' : title,
           initialQuery: query,
         ),
+      ),
+    );
+  }
+
+  void _openDetails(BuildContext context, ServiceOffer offer) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => ServiceDetailsPage(serviceId: offer.id, preview: offer),
       ),
     );
   }

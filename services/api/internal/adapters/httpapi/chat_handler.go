@@ -48,6 +48,26 @@ func (handler *ChatHandler) Conversations(w http.ResponseWriter, r *http.Request
 	})
 }
 
+func (handler *ChatHandler) DecideConversation(w http.ResponseWriter, r *http.Request) {
+	identity, _ := authenticatedIdentity(r.Context())
+	var request struct {
+		Decision string `json:"decision"`
+	}
+	if decodeJSONBody(w, r, &request) != nil ||
+		(request.Decision != "accept" && request.Decision != "decline") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Decisão inválida."})
+		return
+	}
+	conversation, err := handler.service.DecideConversation(
+		r.Context(), identity.UID, r.PathValue("id"), request.Decision == "accept",
+	)
+	if err != nil {
+		writeChatError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": conversation})
+}
+
 func (handler *ChatHandler) Messages(w http.ResponseWriter, r *http.Request) {
 	identity, _ := authenticatedIdentity(r.Context())
 	before, beforeErr := optionalInt64(r.URL.Query().Get("before_sequence"))
@@ -96,6 +116,12 @@ func writeChatError(w http.ResponseWriter, err error) {
 		status, message = http.StatusNotFound, "Destinatário não encontrado."
 	case errors.Is(err, domainchat.ErrInvalidMessage):
 		status, message = http.StatusBadRequest, "Mensagem inválida."
+	case errors.Is(err, domainchat.ErrConversationPending):
+		status, message = http.StatusConflict, "A conversa ainda não foi aceita."
+	case errors.Is(err, domainchat.ErrInvalidMedia):
+		status, message = http.StatusBadRequest, "Audio invalido."
+	case errors.Is(err, domainchat.ErrMediaNotFound):
+		status, message = http.StatusNotFound, "Audio nao encontrado."
 	case strings.Contains(err.Error(), "cursor"):
 		status, message = http.StatusBadRequest, "Cursor inválido."
 	}

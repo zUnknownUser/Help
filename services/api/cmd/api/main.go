@@ -15,6 +15,7 @@ import (
 	"github.com/vendlydigital/help/services/api/internal/adapters/firebaseauth"
 	"github.com/vendlydigital/help/services/api/internal/adapters/firebasepush"
 	"github.com/vendlydigital/help/services/api/internal/adapters/httpapi"
+	"github.com/vendlydigital/help/services/api/internal/adapters/localmedia"
 	"github.com/vendlydigital/help/services/api/internal/adapters/mailersend"
 	postgrescatalog "github.com/vendlydigital/help/services/api/internal/adapters/postgres/catalog"
 	postgrescategories "github.com/vendlydigital/help/services/api/internal/adapters/postgres/categories"
@@ -25,13 +26,18 @@ import (
 	postgresprofiles "github.com/vendlydigital/help/services/api/internal/adapters/postgres/profiles"
 	postgrespromotions "github.com/vendlydigital/help/services/api/internal/adapters/postgres/promotions"
 	postgresprovider "github.com/vendlydigital/help/services/api/internal/adapters/postgres/providerworkspace"
+	postgresscheduling "github.com/vendlydigital/help/services/api/internal/adapters/postgres/scheduling"
+	postgresrequests "github.com/vendlydigital/help/services/api/internal/adapters/postgres/servicerequests"
 	"github.com/vendlydigital/help/services/api/internal/adapters/realtime"
 	applicationauth "github.com/vendlydigital/help/services/api/internal/application/auth"
+	applicationcatalog "github.com/vendlydigital/help/services/api/internal/application/catalog"
 	applicationchat "github.com/vendlydigital/help/services/api/internal/application/chat"
 	applicationhome "github.com/vendlydigital/help/services/api/internal/application/home"
 	applicationprofiles "github.com/vendlydigital/help/services/api/internal/application/profiles"
 	applicationprovider "github.com/vendlydigital/help/services/api/internal/application/providerworkspace"
 	applicationpush "github.com/vendlydigital/help/services/api/internal/application/push"
+	applicationscheduling "github.com/vendlydigital/help/services/api/internal/application/scheduling"
+	applicationrequests "github.com/vendlydigital/help/services/api/internal/application/servicerequests"
 	"github.com/vendlydigital/help/services/api/internal/config"
 	"github.com/vendlydigital/help/services/api/internal/database"
 )
@@ -97,6 +103,12 @@ func run() error {
 	saveDefaultLocation := applicationprofiles.NewSaveDefaultLocation(locationRepository)
 	viewerRepository := postgreshome.NewViewerRepository(pool)
 	catalogRepository := postgrescatalog.NewRepository(pool)
+	serviceDetails := applicationcatalog.NewGetDetails(catalogRepository)
+	serviceRequestRepository := postgresrequests.NewRepository(pool)
+	serviceRequests := applicationrequests.NewCreator(serviceRequestRepository, time.Now)
+	serviceRequestLifecycle := applicationrequests.NewLifecycle(serviceRequestRepository)
+	scheduleRepository := postgresscheduling.NewRepository(pool)
+	scheduleService := applicationscheduling.NewService(scheduleRepository, scheduleRepository, time.Now)
 	categoryRepository := postgrescategories.NewRepository(pool)
 	providerRepository := postgresprovider.NewRepository(pool)
 	providerHome := applicationprovider.NewGetHome(providerRepository, categoryRepository)
@@ -109,15 +121,28 @@ func run() error {
 	cachedHomeBase := applicationhome.NewCachedHomeBase(getHomeBase, 30*time.Second)
 	getHome := applicationhome.NewGetHome(cachedHomeBase, viewerRepository, catalogRepository)
 	deviceRepository := postgresdevices.NewRepository(pool)
-	pushService := applicationpush.NewService(
-		deviceRepository,
-		postgresnotifications.NewRepository(pool),
-		firebasepush.NewSender(firebaseMessaging),
-	)
+	notificationRepository := postgresnotifications.NewRepository(pool)
+	pushSender := firebasepush.NewSender(firebaseMessaging)
+	pushService := applicationpush.NewService(notificationRepository)
+	pushDispatcher := applicationpush.NewDispatcher(deviceRepository, notificationRepository, pushSender)
+	go pushDispatcher.Run(ctx)
+	reminderScheduler := applicationpush.NewReminderScheduler(notificationRepository, time.Minute, time.Now)
+	go reminderScheduler.Run(ctx)
 	realtimeHub := realtime.NewHub()
 	chatService := applicationchat.NewService(
 		postgreschat.NewRepository(pool), realtimeHub, pushService,
 	)
+	mediaStore, err := localmedia.NewStore(cfg.ChatMediaDirectory)
+	if err != nil {
+		return err
+	}
+	chatMediaService := applicationchat.NewMediaService(postgreschat.NewRepository(pool), mediaStore)
+	iceConfigService := applicationchat.NewICEConfigService(applicationchat.ICEConfig{
+		STUNURLs:      cfg.RTC.STUNURLs,
+		TURNURLs:      cfg.RTC.TURNURLs,
+		TURNSecret:    cfg.RTC.TURNSecret,
+		CredentialTTL: cfg.RTC.CredentialTTL,
+	}, time.Now)
 	router := httpapi.NewRouter(httpapi.RouterDependencies{
 		PasswordResetRequester:     timedPasswordReset,
 		PasswordResetLimiter:       httpapi.NewMemoryRateLimiter(5, time.Minute),
@@ -130,11 +155,18 @@ func run() error {
 		NotificationMarker:         viewerRepository,
 		HomeGetter:                 getHome,
 		CatalogSearcher:            catalogRepository,
+		ServiceDetailsGetter:       serviceDetails,
+		ServiceRequestCreator:      serviceRequests,
+		ServiceRequestLifecycle:    serviceRequestLifecycle,
+		ProviderScheduleManager:    scheduleService,
+		ServiceAvailability:        scheduleService,
 		ProviderHomeGetter:         providerHome,
 		ProviderServiceManager:     providerManager,
 		DeviceRepository:           deviceRepository,
 		UserDirectory:              profileRepository,
 		ChatService:                chatService,
+		ICEConfigService:           iceConfigService,
+		ChatMediaService:           chatMediaService,
 		RealtimeHub:                realtimeHub,
 		ReadinessChecker:           pool,
 		TrustProxyHeaders:          cfg.TrustProxyHeaders,
@@ -144,8 +176,8 @@ func run() error {
 		Addr:              ":" + cfg.Port,
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      15 * time.Second,
+		ReadTimeout:       35 * time.Second,
+		WriteTimeout:      35 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 

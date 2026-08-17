@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/foundations/app_colors.dart';
-import 'home_nav_bar.dart';
 
 class HomeLoadingView extends StatelessWidget {
   const HomeLoadingView({super.key});
@@ -40,7 +39,6 @@ class HomeLoadingView extends StatelessWidget {
           ),
         ),
       ),
-      bottomNavigationBar: const HomeNavBar(),
     );
   }
 }

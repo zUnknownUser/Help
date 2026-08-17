@@ -1,6 +1,11 @@
 package catalog
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+var ErrServiceNotFound = errors.New("public service not found")
 
 type Service struct {
 	ID              string
@@ -42,6 +47,20 @@ type Listing struct {
 	Service          Service
 	ProviderName     string
 	ProviderVerified bool
+}
+
+type ViewerAddress struct {
+	Label, FormattedAddress string
+	Latitude, Longitude     float64
+}
+
+type Details struct {
+	Listing
+	ProviderUserID       string
+	ServiceArea          string
+	ViewerAddress        *ViewerAddress
+	CanRequest           bool
+	RequestBlockedReason string
 }
 
 type Page struct {

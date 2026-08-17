@@ -54,14 +54,11 @@ type WorkspaceAlert struct {
 }
 
 type ServiceRequest struct {
-	ID           string
-	ServiceID    string
-	ServiceTitle string
-	CustomerName string
-	Status       string
-	Note         string
-	ScheduledFor *time.Time
-	CreatedAt    time.Time
+	ID, ServiceID, ServiceTitle, CustomerName string
+	Status, Note, Address                     string
+	QuotedPriceCents                          int
+	ScheduledFor                              *time.Time
+	CreatedAt                                 time.Time
 }
 
 type Workspace struct {
@@ -78,6 +75,8 @@ type WorkspaceNotification struct {
 	ID        string
 	Title     string
 	Body      string
+	Kind      string
+	Data      map[string]string
 	Read      bool
 	CreatedAt time.Time
 }

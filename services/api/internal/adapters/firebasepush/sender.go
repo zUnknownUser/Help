@@ -5,16 +5,18 @@ import (
 	"fmt"
 
 	"firebase.google.com/go/v4/messaging"
+
+	"github.com/vendlydigital/help/services/api/internal/application/ports"
 )
 
 type Sender struct{ client *messaging.Client }
 
 func NewSender(client *messaging.Client) *Sender { return &Sender{client: client} }
 
-func (sender *Sender) SendNewMessage(
+func (sender *Sender) Send(
 	ctx context.Context,
 	tokens []string,
-	conversationID string,
+	message ports.PushNotification,
 ) ([]string, error) {
 	invalid := make([]string, 0)
 	for start := 0; start < len(tokens); start += 500 {
@@ -23,14 +25,14 @@ func (sender *Sender) SendNewMessage(
 		response, err := sender.client.SendEachForMulticast(ctx, &messaging.MulticastMessage{
 			Tokens: batch,
 			Notification: &messaging.Notification{
-				Title: "Nova mensagem", Body: "Você recebeu uma nova mensagem.",
+				Title: message.Title, Body: message.Body,
 			},
-			Data:    map[string]string{"type": "chat", "conversation_id": conversationID},
+			Data:    message.Data,
 			Android: &messaging.AndroidConfig{Priority: "high"},
 			APNS: &messaging.APNSConfig{
 				Headers: map[string]string{"apns-priority": "10"},
 				Payload: &messaging.APNSPayload{Aps: &messaging.Aps{
-					Sound: "default", ContentAvailable: true, ThreadID: conversationID,
+					Sound: "default", ContentAvailable: true, ThreadID: message.Data["request_id"] + message.Data["conversation_id"],
 				}},
 			},
 		})

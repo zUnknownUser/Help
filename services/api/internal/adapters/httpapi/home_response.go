@@ -56,11 +56,13 @@ type homeCategory struct {
 }
 
 type homeNotification struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	Body      string `json:"body"`
-	Read      bool   `json:"read"`
-	CreatedAt string `json:"created_at"`
+	ID        string            `json:"id"`
+	Title     string            `json:"title"`
+	Body      string            `json:"body"`
+	Kind      string            `json:"kind"`
+	Data      map[string]string `json:"data"`
+	Read      bool              `json:"read"`
+	CreatedAt string            `json:"created_at"`
 }
 
 type homeService struct {
@@ -75,7 +77,7 @@ type homeService struct {
 	ImageAlignment  float64      `json:"image_alignment"`
 	Badge           string       `json:"badge,omitempty"`
 	Provider        homeProvider `json:"provider"`
-	CategoryID      string       `json:"category_id,omitempty"`
+	CategoryID      string       `json:"category_id"`
 	DistanceKM      *float64     `json:"distance_km,omitempty"`
 }
 
@@ -145,6 +147,7 @@ func newHomeResponse(content domainhome.Content) homeEnvelope {
 	for _, notification := range content.Viewer.Notifications {
 		data.Notifications = append(data.Notifications, homeNotification{
 			ID: notification.ID, Title: notification.Title, Body: notification.Body,
+			Kind: notification.Kind, Data: notification.Data,
 			Read: notification.Read, CreatedAt: notification.CreatedAt,
 		})
 	}

@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/design_system/foundations/app_colors.dart';
+import '../../../../core/design_system/components/app_loading.dart';
 import '../../domain/entities/home_notification.dart';
 import '../providers/home_providers.dart';
+import '../../../chat/data/providers/chat_data_providers.dart';
+import '../../../chat/presentation/pages/chat_list_page.dart';
+import '../../../chat/presentation/pages/chat_page.dart';
+import '../../../service_requests/presentation/pages/service_request_details_page.dart';
 
 class NotificationsPage extends ConsumerStatefulWidget {
   const NotificationsPage({required this.notifications, super.key});
@@ -49,7 +54,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                   subtitle: Text(notification.body),
-                  onTap: read ? null : () => _markRead(notification.id),
+                  onTap: () => _handle(notification, read: read),
                 );
               },
             ),
@@ -70,6 +75,44 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         content: Text('Não foi possível atualizar a notificação.'),
       ),
     );
+  }
+
+  Future<void> _handle(
+    HomeNotification notification, {
+    required bool read,
+  }) async {
+    if (!read) await _markRead(notification.id);
+    if (!mounted) return;
+    if (notification.kind == 'service_request') {
+      final requestId = notification.data['request_id'];
+      if (requestId != null && requestId.isNotEmpty) {
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => ServiceRequestDetailsPage(requestId: requestId),
+          ),
+        );
+      }
+      return;
+    }
+    if (notification.kind == 'chat' || notification.kind == 'chat_request') {
+      final conversationId = notification.data['conversation_id'];
+      if (conversationId == null || conversationId.isEmpty) return;
+      final conversation = await runWithAppLoading(
+        context,
+        message: 'Abrindo conversa…',
+        action: () => ref
+            .read(chatRealtimeCoordinatorProvider)
+            .openConversation(conversationId),
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => conversation == null
+              ? const ChatListPage()
+              : ChatPage(conversation: conversation),
+        ),
+      );
+    }
   }
 }
 

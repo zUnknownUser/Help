@@ -4,14 +4,24 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"time"
 )
 
 type Config struct {
-	Port              string
-	FirebaseProjectID string
-	TrustProxyHeaders bool
-	MailerSend        MailerSendConfig
-	Database          DatabaseConfig
+	Port               string
+	FirebaseProjectID  string
+	TrustProxyHeaders  bool
+	MailerSend         MailerSendConfig
+	Database           DatabaseConfig
+	RTC                RTCConfig
+	ChatMediaDirectory string
+}
+
+type RTCConfig struct {
+	STUNURLs      []string
+	TURNURLs      []string
+	TURNSecret    string
+	CredentialTTL time.Duration
 }
 
 type DatabaseConfig struct {
@@ -46,6 +56,10 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	turnTTLSeconds, err := readInt("TURN_CREDENTIAL_TTL_SECONDS", 3600, 300, 86400)
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		Port:              port,
@@ -61,6 +75,13 @@ func Load() (Config, error) {
 			MaxConnections: maxConnections,
 			MinConnections: minConnections,
 		},
+		RTC: RTCConfig{
+			STUNURLs:      splitCSV(valueOrDefault("STUN_URLS", "stun:stun.l.google.com:19302")),
+			TURNURLs:      splitCSV(os.Getenv("TURN_URLS")),
+			TURNSecret:    strings.TrimSpace(os.Getenv("TURN_SHARED_SECRET")),
+			CredentialTTL: time.Duration(turnTTLSeconds) * time.Second,
+		},
+		ChatMediaDirectory: valueOrDefault("CHAT_MEDIA_DIR", ".data/chat-media"),
 	}
 	if cfg.FirebaseProjectID == "" {
 		return Config{}, errors.New("FIREBASE_PROJECT_ID is required")
@@ -74,7 +95,20 @@ func Load() (Config, error) {
 	if cfg.Database.URL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
 	}
+	if len(cfg.RTC.TURNURLs) > 0 && cfg.RTC.TURNSecret == "" {
+		return Config{}, errors.New("TURN_SHARED_SECRET is required when TURN_URLS is configured")
+	}
 	return cfg, nil
+}
+
+func splitCSV(raw string) []string {
+	values := make([]string, 0)
+	for _, value := range strings.Split(raw, ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }
 
 func valueOrDefault(key, fallback string) string {

@@ -46,6 +46,10 @@ dependencies:
   path: ^1.9.1
   uuid: ^4.6.0
   web_socket_channel: ^3.0.3
+  flutter_webrtc: ^1.5.2
+  record: ^7.1.1
+  just_audio: ^0.10.6
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:

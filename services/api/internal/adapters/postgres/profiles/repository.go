@@ -71,6 +71,19 @@ func upsertProvider(
 	if err != nil {
 		return fmt.Errorf("upsert provider profile: %w", err)
 	}
+	var providerID string
+	if err := tx.QueryRow(ctx, `SELECT id FROM providers WHERE owner_uid=$1`, profile.UID).Scan(&providerID); err != nil {
+		return fmt.Errorf("load provider schedule identity: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO provider_schedule_settings(provider_id) VALUES($1) ON CONFLICT DO NOTHING`, providerID); err != nil {
+		return fmt.Errorf("create provider schedule: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO provider_availability_rules(provider_id,weekday,start_minute,end_minute)
+		SELECT $1,weekday,480,1080 FROM generate_series(1,6) weekday
+		ON CONFLICT DO NOTHING`, providerID); err != nil {
+		return fmt.Errorf("create provider schedule defaults: %w", err)
+	}
 	return nil
 }
 

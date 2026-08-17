@@ -17,6 +17,7 @@ type ProfileReader interface {
 type PublicUser struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name"`
+	Role        string `json:"role"`
 }
 
 type UserPage struct {

@@ -16,17 +16,6 @@ import (
 	domainchat "github.com/vendlydigital/help/services/api/internal/domain/chat"
 )
 
-const (
-	eventMessageSend      = "message.send"
-	eventMessageAck       = "message.ack"
-	eventMessageError     = "message.error"
-	eventMessageDelivered = "message.delivered"
-	eventMessageRead      = "message.read"
-	eventTypingStart      = "typing.start"
-	eventTypingStop       = "typing.stop"
-	eventSessionReady     = "session.ready"
-)
-
 type RealtimeHandler struct {
 	hub     *realtime.Hub
 	service *applicationchat.Service
@@ -57,7 +46,7 @@ func (handler *RealtimeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}()
 	slog.Info("realtime connected", "connection_id", connection.ID(), "user_id", identity.UID)
 	connection.Enqueue(mustEvent(ports.RealtimeEvent{
-		Type: eventSessionReady, Data: map[string]string{"connection_id": connection.ID()},
+		Type: domainchat.EventSessionReady, Data: map[string]string{"connection_id": connection.ID()},
 	}))
 	go func() {
 		_ = connection.WriteLoop(ctx)
@@ -89,15 +78,91 @@ func (handler *RealtimeHandler) handleEvent(
 		return
 	}
 	switch event.Type {
-	case eventMessageSend:
+	case domainchat.EventMessageSend:
 		handler.handleSend(ctx, connection, userID, event.Data)
-	case eventMessageDelivered, eventMessageRead:
+	case domainchat.EventMessageDelivered, domainchat.EventMessageRead:
 		handler.handleReceipt(ctx, connection, userID, event.Type, event.Data)
-	case eventTypingStart, eventTypingStop:
-		handler.handleTyping(ctx, connection, userID, event.Type == eventTypingStart, event.Data)
+	case domainchat.EventMessageEdit, domainchat.EventMessageDelete:
+		handler.handleMutation(ctx, connection, userID, event.Type, event.Data)
+	case domainchat.EventTypingStart, domainchat.EventTypingStop:
+		handler.handleTyping(ctx, connection, userID, event.Type == domainchat.EventTypingStart, event.Data)
+	case domainchat.EventCallInvite, domainchat.EventCallRinging,
+		domainchat.EventCallAccept, domainchat.EventCallReject,
+		domainchat.EventCallOffer, domainchat.EventCallAnswer,
+		domainchat.EventCallICE, domainchat.EventCallHangup, domainchat.EventCallBusy:
+		handler.handleCall(ctx, connection, userID, event.Type, event.Data)
 	default:
 		connection.Enqueue(realtimeError("", "unsupported_event", false))
 	}
+}
+
+func (handler *RealtimeHandler) handleCall(
+	ctx context.Context,
+	connection *realtime.Connection,
+	userID, eventType string,
+	payload json.RawMessage,
+) {
+	var signal domainchat.CallSignal
+	if json.Unmarshal(payload, &signal) != nil {
+		connection.Enqueue(callError("", "", "invalid_call"))
+		return
+	}
+	if err := handler.service.RelayCall(ctx, userID, eventType, signal); err != nil {
+		connection.Enqueue(callError(signal.CallID, signal.ConversationID, chatErrorCode(err)))
+		return
+	}
+	slog.Info("call signal relayed",
+		"connection_id", connection.ID(), "user_id", userID,
+		"conversation_id", signal.ConversationID, "call_id", signal.CallID,
+		"event_type", eventType,
+	)
+}
+
+func (handler *RealtimeHandler) handleMutation(
+	ctx context.Context,
+	connection *realtime.Connection,
+	userID, eventType string,
+	payload json.RawMessage,
+) {
+	var request struct {
+		OperationID string `json:"operation_id"`
+		MessageID   string `json:"message_id"`
+		Content     string `json:"content"`
+	}
+	if json.Unmarshal(payload, &request) != nil {
+		connection.Enqueue(mutationError("", "invalid_message", false))
+		return
+	}
+	mutation := domainchat.MessageMutation{
+		OperationID: request.OperationID,
+		MessageID:   request.MessageID,
+		Content:     request.Content,
+	}
+	var (
+		message domainchat.Message
+		err     error
+	)
+	if eventType == domainchat.EventMessageDelete {
+		message, err = handler.service.Delete(ctx, userID, mutation)
+	} else {
+		message, err = handler.service.Edit(ctx, userID, mutation)
+	}
+	if err != nil {
+		connection.Enqueue(mutationError(
+			request.OperationID, chatErrorCode(err), isRetryableChatError(err),
+		))
+		return
+	}
+	connection.Enqueue(mustEvent(ports.RealtimeEvent{
+		Type: domainchat.EventMutationAck,
+		Data: map[string]any{"operation_id": request.OperationID, "message": message},
+	}))
+	slog.Info("message mutation acknowledged",
+		"connection_id", connection.ID(), "user_id", userID,
+		"conversation_id", message.ConversationID,
+		"server_message_id", message.ID, "operation_id", request.OperationID,
+		"version", message.Version,
+	)
 }
 
 func (handler *RealtimeHandler) handleSend(
@@ -107,23 +172,26 @@ func (handler *RealtimeHandler) handleSend(
 	payload json.RawMessage,
 ) {
 	var request struct {
-		ConversationID string `json:"conversation_id"`
-		ClientID       string `json:"client_id"`
-		Content        string `json:"content"`
+		ConversationID string                 `json:"conversation_id"`
+		ClientID       string                 `json:"client_id"`
+		Content        string                 `json:"content"`
+		Kind           domainchat.MessageKind `json:"kind"`
+		MediaID        string                 `json:"media_id"`
 	}
 	if json.Unmarshal(payload, &request) != nil {
 		connection.Enqueue(realtimeError("", "invalid_message", false))
 		return
 	}
 	message, err := handler.service.Send(ctx, userID, domainchat.SendMessage{
-		ConversationID: request.ConversationID, ClientID: request.ClientID, Content: request.Content,
+		ConversationID: request.ConversationID, ClientID: request.ClientID,
+		Content: request.Content, Kind: request.Kind, MediaID: request.MediaID,
 	})
 	if err != nil {
 		connection.Enqueue(realtimeError(request.ClientID, chatErrorCode(err), isRetryableChatError(err)))
 		return
 	}
 	connection.Enqueue(mustEvent(ports.RealtimeEvent{
-		Type: eventMessageAck,
+		Type: domainchat.EventMessageAck,
 		Data: map[string]any{"client_id": request.ClientID, "message": message},
 	}))
 	slog.Info("message acknowledged",
@@ -148,7 +216,7 @@ func (handler *RealtimeHandler) handleReceipt(
 		return
 	}
 	var err error
-	if eventType == eventMessageRead {
+	if eventType == domainchat.EventMessageRead {
 		err = handler.service.Read(ctx, userID, receipt.ConversationID, receipt.UpToSequence)
 	} else {
 		err = handler.service.Delivered(ctx, userID, receipt.ConversationID, receipt.UpToSequence)
@@ -183,8 +251,20 @@ func mustEvent(event ports.RealtimeEvent) []byte {
 }
 
 func realtimeError(clientID, code string, retryable bool) []byte {
-	return mustEvent(ports.RealtimeEvent{Type: eventMessageError, Data: map[string]any{
+	return mustEvent(ports.RealtimeEvent{Type: domainchat.EventMessageError, Data: map[string]any{
 		"client_id": clientID, "code": code, "retryable": retryable,
+	}})
+}
+
+func mutationError(operationID, code string, retryable bool) []byte {
+	return mustEvent(ports.RealtimeEvent{Type: domainchat.EventMutationError, Data: map[string]any{
+		"operation_id": operationID, "code": code, "retryable": retryable,
+	}})
+}
+
+func callError(callID, conversationID, code string) []byte {
+	return mustEvent(ports.RealtimeEvent{Type: domainchat.EventCallError, Data: map[string]any{
+		"call_id": callID, "conversation_id": conversationID, "code": code,
 	}})
 }
 
@@ -194,8 +274,18 @@ func chatErrorCode(err error) string {
 		return "forbidden"
 	case errors.Is(err, domainchat.ErrConversationNotFound):
 		return "conversation_not_found"
+	case errors.Is(err, domainchat.ErrMessageNotFound):
+		return "message_not_found"
 	case errors.Is(err, domainchat.ErrInvalidMessage):
 		return "invalid_message"
+	case errors.Is(err, domainchat.ErrConversationPending):
+		return "conversation_pending"
+	case errors.Is(err, domainchat.ErrRecipientOffline):
+		return "recipient_offline"
+	case errors.Is(err, domainchat.ErrInvalidCall):
+		return "invalid_call"
+	case errors.Is(err, domainchat.ErrInvalidMedia), errors.Is(err, domainchat.ErrMediaNotFound):
+		return "invalid_media"
 	default:
 		return "temporarily_unavailable"
 	}
@@ -204,5 +294,9 @@ func chatErrorCode(err error) string {
 func isRetryableChatError(err error) bool {
 	return !errors.Is(err, domainchat.ErrForbidden) &&
 		!errors.Is(err, domainchat.ErrConversationNotFound) &&
-		!errors.Is(err, domainchat.ErrInvalidMessage)
+		!errors.Is(err, domainchat.ErrMessageNotFound) &&
+		!errors.Is(err, domainchat.ErrConversationPending) &&
+		!errors.Is(err, domainchat.ErrInvalidMessage) &&
+		!errors.Is(err, domainchat.ErrInvalidMedia) &&
+		!errors.Is(err, domainchat.ErrMediaNotFound)
 }

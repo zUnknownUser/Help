@@ -44,6 +44,8 @@ type Notification struct {
 	ID        string
 	Title     string
 	Body      string
+	Kind      string
+	Data      map[string]string
 	Read      bool
 	CreatedAt string
 }

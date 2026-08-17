@@ -40,7 +40,8 @@ final typingProvider = StreamProvider.autoDispose.family<bool, String>(
       ref.watch(chatRealtimeCoordinatorProvider).watchTyping(conversationId),
 );
 
-final userPresenceProvider = StreamProvider.autoDispose.family<bool, String>(
-  (ref, userId) =>
-      ref.watch(chatRealtimeCoordinatorProvider).watchPresence(userId),
-);
+final userPresenceProvider = StreamProvider.autoDispose
+    .family<PresenceEvent, String>(
+      (ref, userId) =>
+          ref.watch(chatRealtimeCoordinatorProvider).watchPresence(userId),
+    );

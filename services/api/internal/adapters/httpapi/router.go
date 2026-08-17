@@ -31,11 +31,18 @@ type RouterDependencies struct {
 	NotificationMarker         ports.NotificationMarker
 	HomeGetter                 ports.HomeGetter
 	CatalogSearcher            ports.CatalogSearcher
+	ServiceDetailsGetter       ports.ServiceDetailsGetter
+	ServiceRequestCreator      ports.ServiceRequestCreator
+	ServiceRequestLifecycle    ports.ServiceRequestLifecycle
+	ProviderScheduleManager    ports.ProviderScheduleManager
+	ServiceAvailability        ports.ServiceAvailability
 	ProviderHomeGetter         ports.ProviderHomeGetter
 	ProviderServiceManager     ports.ProviderServiceManager
 	DeviceRepository           ports.DeviceRepository
 	UserDirectory              ports.UserDirectory
 	ChatService                *applicationchat.Service
+	ICEConfigService           *applicationchat.ICEConfigService
+	ChatMediaService           *applicationchat.MediaService
 	RealtimeHub                *realtime.Hub
 	ReadinessChecker           ReadinessChecker
 	TrustProxyHeaders          bool
@@ -84,6 +91,17 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 		"GET /v1/services",
 		requireAuth(dependencies.TokenVerifier, NewCatalogHandler(dependencies.CatalogSearcher)),
 	)
+	serviceHandler := NewServiceDetailsHandler(dependencies.ServiceDetailsGetter, dependencies.ServiceRequestCreator)
+	mux.Handle("GET /v1/services/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(serviceHandler.Details)))
+	mux.Handle("POST /v1/services/{id}/requests", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(serviceHandler.CreateRequest)))
+	scheduleHandler := NewScheduleHandler(dependencies.ProviderScheduleManager, dependencies.ServiceAvailability)
+	mux.Handle("GET /v1/services/{id}/available-slots", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(scheduleHandler.Slots)))
+	requestHandler := NewServiceRequestHandler(dependencies.ServiceRequestLifecycle)
+	mux.Handle("GET /v1/service-requests", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(requestHandler.List)))
+	mux.Handle("GET /v1/provider/agenda", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(requestHandler.Agenda)))
+	mux.Handle("GET /v1/service-requests/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(requestHandler.Details)))
+	mux.Handle("POST /v1/service-requests/{id}/transitions", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(requestHandler.Transition)))
+	mux.Handle("POST /v1/service-requests/{id}/reschedule", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(requestHandler.Reschedule)))
 	providerHandler := NewProviderHandler(dependencies.ProviderHomeGetter, dependencies.ProviderServiceManager)
 	mux.Handle("GET /v1/provider/home", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(providerHandler.Home)))
 	mux.Handle("POST /v1/provider/services", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(providerHandler.CreateService)))
@@ -91,14 +109,23 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 	mux.Handle("PATCH /v1/provider/services/{id}/publication", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(providerHandler.SetPublication)))
 	mux.Handle("DELETE /v1/provider/services/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(providerHandler.DeleteService)))
 	mux.Handle("PATCH /v1/provider/availability", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(providerHandler.SetAvailability)))
+	mux.Handle("GET /v1/provider/schedule", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(scheduleHandler.Get)))
+	mux.Handle("PUT /v1/provider/schedule", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(scheduleHandler.Replace)))
+	mux.Handle("POST /v1/provider/schedule/blocks", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(scheduleHandler.AddBlock)))
+	mux.Handle("DELETE /v1/provider/schedule/blocks/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(scheduleHandler.DeleteBlock)))
 	deviceHandler := NewDeviceHandler(dependencies.DeviceRepository)
 	mux.Handle("POST /v1/devices", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(deviceHandler.Register)))
 	mux.Handle("DELETE /v1/devices/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(deviceHandler.Disable)))
 	chatHandler := NewChatHandler(dependencies.ChatService)
 	mux.Handle("POST /v1/chat/conversations/direct", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(chatHandler.DirectConversation)))
 	mux.Handle("GET /v1/chat/conversations", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(chatHandler.Conversations)))
+	mux.Handle("POST /v1/chat/conversations/{id}/decision", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(chatHandler.DecideConversation)))
 	mux.Handle("GET /v1/chat/conversations/{id}/messages", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(chatHandler.Messages)))
+	mediaHandler := NewChatMediaHandler(dependencies.ChatMediaService)
+	mux.Handle("POST /v1/chat/conversations/{id}/voice-media", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(mediaHandler.UploadVoice)))
+	mux.Handle("GET /v1/chat/media/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(mediaHandler.Serve)))
 	mux.Handle("GET /v1/realtime", requireAuth(dependencies.TokenVerifier, NewRealtimeHandler(dependencies.RealtimeHub, dependencies.ChatService)))
+	mux.Handle("GET /v1/realtime/ice-config", requireAuth(dependencies.TokenVerifier, NewICEConfigHandler(dependencies.ICEConfigService)))
 	mux.Handle("GET /v1/users", requireAuth(dependencies.TokenVerifier, NewUserHandler(dependencies.UserDirectory)))
 	return securityHeaders(mux)
 }

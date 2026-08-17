@@ -112,6 +112,7 @@ func catalogQuery(sort string, hasCursor bool) (string, string) {
 		FROM services s
 		JOIN providers p ON p.id = s.provider_id AND p.active
 		  AND p.accepting_requests AND p.onboarding_status = 'approved'
+		  AND p.owner_uid IS NOT NULL
 		LEFT JOIN user_addresses a
 		  ON a.firebase_uid = p.owner_uid AND a.is_default AND a.active
 		WHERE s.active AND s.deleted_at IS NULL

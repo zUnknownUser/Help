@@ -13,7 +13,6 @@ void main() {
         theme: AppTheme.light,
         home: ProviderDashboardView(
           workspace: _workspace,
-          chatUnreadCount: 2,
           onRefresh: () async {},
           onAvailabilityChanged: (_) {},
           onAlert: (_) {},
@@ -21,9 +20,10 @@ void main() {
           onEditService: (_) {},
           onPublishedChanged: (_, _) {},
           onDeleteService: (_) {},
-          onConversations: () {},
           onAccount: () {},
           onNotifications: () {},
+          onSchedule: () {},
+          onAgenda: () {},
         ),
       ),
     );

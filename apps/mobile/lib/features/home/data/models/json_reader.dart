@@ -9,6 +9,13 @@ abstract final class JsonReader {
     return value.map((item) => map(item, field)).toList(growable: false);
   }
 
+  static List<String> strings(Object? value, String field) {
+    if (value is! List || value.any((item) => item is! String)) {
+      throw FormatException('$field must be a string array');
+    }
+    return value.cast<String>();
+  }
+
   static String string(Map<String, dynamic> json, String field) {
     final value = json[field];
     if (value is String) return value;

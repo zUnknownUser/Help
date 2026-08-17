@@ -12,7 +12,11 @@ import (
 
 const messageColumns = `
 	m.id::text, m.client_id::text, m.conversation_id::text, m.sender_uid,
-	m.content, m.sequence, m.created_at,
+	m.content, m.kind, COALESCE(m.media_id::text, ''),
+	COALESCE((SELECT media.content_type FROM chat_media_assets media WHERE media.id=m.media_id), ''),
+	COALESCE((SELECT media.byte_size FROM chat_media_assets media WHERE media.id=m.media_id), 0),
+	COALESCE((SELECT media.duration_ms FROM chat_media_assets media WHERE media.id=m.media_id), 0),
+	m.sequence, m.created_at, m.edited_at, m.deleted_at, m.version,
 	CASE
 	  WHEN NOT EXISTS (
 	    SELECT 1 FROM conversation_members receipt
@@ -73,6 +77,9 @@ func (repository *Repository) CreateMessage(
 	userID string,
 	input domainchat.SendMessage,
 ) (domainchat.Message, []string, bool, error) {
+	if input.Kind == "" {
+		input.Kind = domainchat.MessageText
+	}
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return domainchat.Message{}, nil, false, fmt.Errorf("begin message: %w", err)
@@ -93,6 +100,18 @@ func (repository *Repository) CreateMessage(
 	if _, err := conversationRecipients(ctx, tx, userID, input.ConversationID); err != nil {
 		return domainchat.Message{}, nil, false, err
 	}
+	if input.Kind == domainchat.MessageVoice {
+		var valid bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(
+			SELECT 1 FROM chat_media_assets
+			WHERE id=$1::uuid AND conversation_id=$2::uuid AND owner_uid=$3
+		)`, input.MediaID, input.ConversationID, userID).Scan(&valid); err != nil {
+			return domainchat.Message{}, nil, false, fmt.Errorf("validate chat media: %w", err)
+		}
+		if !valid {
+			return domainchat.Message{}, nil, false, domainchat.ErrInvalidMedia
+		}
+	}
 	var sequence int64
 	if err := tx.QueryRow(ctx, `
 		UPDATE conversations
@@ -101,21 +120,23 @@ func (repository *Repository) CreateMessage(
 		RETURNING last_sequence`, input.ConversationID).Scan(&sequence); err != nil {
 		return domainchat.Message{}, nil, false, mapChatError(err)
 	}
-	var message domainchat.Message
-	err = tx.QueryRow(ctx, `
-		INSERT INTO chat_messages (conversation_id, sender_uid, client_id, sequence, content)
-		VALUES ($1::uuid, $2, $3::uuid, $4, $5)
-		RETURNING id::text, client_id::text, conversation_id::text, sender_uid,
-		          content, sequence, created_at`,
+	_, err = tx.Exec(ctx, `
+		INSERT INTO chat_messages (
+			conversation_id, sender_uid, client_id, sequence, content, kind, media_id
+		) VALUES ($1::uuid, $2, $3::uuid, $4, $5, $6, NULLIF($7, '')::uuid)`,
 		input.ConversationID, userID, input.ClientID, sequence, input.Content,
-	).Scan(
-		&message.ID, &message.ClientID, &message.ConversationID, &message.SenderUID,
-		&message.Content, &message.Sequence, &message.CreatedAt,
+		input.Kind, input.MediaID,
 	)
 	if err != nil {
 		return domainchat.Message{}, nil, false, fmt.Errorf("insert chat message: %w", err)
 	}
-	message.Status = domainchat.StatusSent
+	message, found, err := findMessageByClientID(ctx, tx, userID, input.ClientID)
+	if err != nil {
+		return domainchat.Message{}, nil, false, fmt.Errorf("reload chat message: %w", err)
+	}
+	if !found {
+		return domainchat.Message{}, nil, false, errors.New("inserted chat message not found")
+	}
 	recipients, err := conversationRecipients(ctx, tx, userID, input.ConversationID)
 	if err != nil {
 		return domainchat.Message{}, nil, false, err
@@ -146,11 +167,22 @@ func findMessageByClientID(
 
 func scanMessage(row rowScanner) (domainchat.Message, error) {
 	var message domainchat.Message
+	var mediaID, mediaContentType string
+	var mediaByteSize int64
+	var mediaDurationMS int
 	if err := row.Scan(
 		&message.ID, &message.ClientID, &message.ConversationID, &message.SenderUID,
-		&message.Content, &message.Sequence, &message.CreatedAt, &message.Status,
+		&message.Content, &message.Kind, &mediaID, &mediaContentType,
+		&mediaByteSize, &mediaDurationMS, &message.Sequence, &message.CreatedAt,
+		&message.EditedAt, &message.DeletedAt, &message.Version, &message.Status,
 	); err != nil {
 		return domainchat.Message{}, err
+	}
+	if mediaID != "" {
+		message.Media = &domainchat.Media{
+			ID: mediaID, ContentType: mediaContentType,
+			ByteSize: mediaByteSize, DurationMS: mediaDurationMS,
+		}
 	}
 	return message, nil
 }

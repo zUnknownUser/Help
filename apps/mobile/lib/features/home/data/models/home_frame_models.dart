@@ -54,6 +54,8 @@ class HomeNotificationModel {
     required this.id,
     required this.title,
     required this.body,
+    required this.kind,
+    required this.data,
     required this.read,
     required this.createdAt,
   });
@@ -63,6 +65,8 @@ class HomeNotificationModel {
         id: JsonReader.string(json, 'id'),
         title: JsonReader.string(json, 'title'),
         body: JsonReader.string(json, 'body'),
+        kind: JsonReader.optionalString(json, 'kind') ?? '',
+        data: _notificationData(json['data']),
         read: JsonReader.boolean(json, 'read'),
         createdAt: DateTime.parse(JsonReader.string(json, 'created_at')),
       );
@@ -70,6 +74,8 @@ class HomeNotificationModel {
   final String id;
   final String title;
   final String body;
+  final String kind;
+  final Map<String, String> data;
   final bool read;
   final DateTime createdAt;
 
@@ -77,7 +83,20 @@ class HomeNotificationModel {
     id: id,
     title: title,
     body: body,
+    kind: kind,
+    data: data,
     read: read,
     createdAt: createdAt,
   );
+}
+
+Map<String, String> _notificationData(Object? value) {
+  if (value == null) return const {};
+  final map = JsonReader.map(value, 'data');
+  return map.map((key, value) {
+    if (value is! String) {
+      throw const FormatException('notification data must contain strings');
+    }
+    return MapEntry(key, value);
+  });
 }

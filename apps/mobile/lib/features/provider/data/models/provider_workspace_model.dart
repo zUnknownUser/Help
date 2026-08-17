@@ -73,6 +73,8 @@ class ProviderWorkspaceModel {
                 id: ProviderJson.string(item, 'id'),
                 title: ProviderJson.string(item, 'title'),
                 body: ProviderJson.string(item, 'body'),
+                kind: item['kind'] as String? ?? '',
+                data: _notificationData(item['data']),
                 read: ProviderJson.boolean(item, 'read'),
                 createdAt: DateTime.parse(
                   ProviderJson.string(item, 'created_at'),
@@ -94,10 +96,23 @@ class ProviderWorkspaceModel {
     customerName: ProviderJson.string(json, 'customer_name'),
     status: ProviderJson.string(json, 'status'),
     note: ProviderJson.string(json, 'note'),
+    quotedPriceCents: ProviderJson.integer(json, 'quoted_price_cents'),
+    address: ProviderJson.string(json, 'address'),
     createdAt: DateTime.parse(ProviderJson.string(json, 'created_at')),
     scheduledFor: switch (json['scheduled_for']) {
       final String value => DateTime.parse(value),
       _ => null,
     },
   );
+}
+
+Map<String, String> _notificationData(Object? value) {
+  if (value == null) return const {};
+  final map = ProviderJson.map(value, 'data');
+  return map.map((key, value) {
+    if (value is! String) {
+      throw const FormatException('notification data must contain strings');
+    }
+    return MapEntry(key, value);
+  });
 }

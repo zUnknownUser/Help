@@ -33,8 +33,10 @@ services:
       PORT: 8080
       DATABASE_URL: postgres://help:help_local_only@db:5432/help?sslmode=disable
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-service-account.json
+      CHAT_MEDIA_DIR: /data/chat-media
     volumes:
       - ./.secrets/firebase-service-account.json:/run/secrets/firebase-service-account.json:ro
+      - ./.data/chat-media:/data/chat-media
     ports:
       - "8080:8080"
     healthcheck:

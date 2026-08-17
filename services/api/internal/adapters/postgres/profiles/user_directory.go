@@ -37,12 +37,38 @@ func (repository *Repository) SearchUsers(
 		cursorName, cursorID = &cursor.Name, &cursor.ID
 	}
 	rows, err := repository.pool.Query(ctx, `
-		SELECT firebase_uid, display_name
-		FROM user_profiles
-		WHERE firebase_uid <> $1
-		  AND ($2 = '' OR display_name ILIKE '%' || $2 || '%')
-		  AND ($3::text IS NULL OR (lower(display_name), firebase_uid) > ($3, $4))
-		ORDER BY lower(display_name), firebase_uid
+		WITH requester AS (
+			SELECT active_role FROM user_profiles WHERE firebase_uid = $1
+		)
+		SELECT candidate.firebase_uid, candidate.display_name,
+		       CASE requester.active_role
+		           WHEN 'provider' THEN 'customer'
+		           ELSE 'provider'
+		       END
+		FROM user_profiles candidate
+		CROSS JOIN requester
+		WHERE candidate.firebase_uid <> $1
+		  AND ($2 = '' OR candidate.display_name ILIKE '%' || $2 || '%')
+		  AND ($3::text IS NULL OR (lower(candidate.display_name), candidate.firebase_uid) > ($3, $4))
+		  AND (
+			(requester.active_role = 'customer' AND EXISTS (
+				SELECT 1 FROM providers provider
+				WHERE provider.owner_uid = candidate.firebase_uid
+				  AND provider.active
+				  AND provider.accepting_requests
+				  AND provider.onboarding_status = 'approved'
+			))
+			OR
+			(requester.active_role = 'provider' AND EXISTS (
+				SELECT 1
+				FROM providers provider
+				JOIN service_requests request ON request.provider_id = provider.id
+				WHERE provider.owner_uid = $1
+				  AND request.customer_uid = candidate.firebase_uid
+				  AND request.status IN ('pending','accepted','in_progress','completed','no_show')
+			))
+		  )
+		ORDER BY lower(candidate.display_name), candidate.firebase_uid
 		LIMIT $5`, requesterID, strings.TrimSpace(query), cursorName, cursorID, limit+1)
 	if err != nil {
 		return ports.UserPage{}, fmt.Errorf("search users: %w", err)
@@ -51,7 +77,7 @@ func (repository *Repository) SearchUsers(
 	users := make([]ports.PublicUser, 0, limit+1)
 	for rows.Next() {
 		var user ports.PublicUser
-		if err := rows.Scan(&user.ID, &user.DisplayName); err != nil {
+		if err := rows.Scan(&user.ID, &user.DisplayName, &user.Role); err != nil {
 			return ports.UserPage{}, err
 		}
 		users = append(users, user)

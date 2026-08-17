@@ -2,14 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/design_system/components/app_button.dart';
+import '../../../../core/design_system/components/app_loading.dart';
 import '../../../../core/design_system/foundations/app_colors.dart';
-import '../../../chat/presentation/pages/chat_list_page.dart';
-import '../../../chat/presentation/providers/chat_providers.dart';
 import '../../../home/domain/entities/home_location.dart';
 import '../../../home/domain/entities/home_notification.dart';
 import '../../../home/presentation/pages/location_page.dart';
 import '../../../home/presentation/pages/notifications_page.dart';
-import '../../../profile/presentation/pages/account_page.dart';
+import '../../../main_navigation/presentation/main_tab.dart';
 import '../../domain/entities/provider_service.dart';
 import '../../domain/entities/provider_workspace.dart';
 import '../../domain/failures/provider_failure.dart';
@@ -17,9 +16,14 @@ import '../provider_failure_message.dart';
 import '../providers/provider_workspace_providers.dart';
 import '../widgets/provider_dashboard_view.dart';
 import 'provider_service_form_page.dart';
+import '../../../service_requests/presentation/pages/service_request_details_page.dart';
+import '../../../scheduling/presentation/pages/provider_schedule_page.dart';
+import '../../../scheduling/presentation/pages/provider_agenda_page.dart';
 
 class ProviderDashboardPage extends ConsumerWidget {
-  const ProviderDashboardPage({super.key});
+  const ProviderDashboardPage({required this.onTabSelected, super.key});
+
+  final ValueChanged<MainTab> onTabSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -31,7 +35,6 @@ class ProviderDashboardPage extends ConsumerWidget {
       ),
       data: (workspace) => ProviderDashboardView(
         workspace: workspace,
-        chatUnreadCount: ref.watch(unreadChatCountProvider).value ?? 0,
         onRefresh: ref.read(providerWorkspaceControllerProvider.notifier).retry,
         onAvailabilityChanged: (value) => _availability(context, ref, value),
         onAlert: (alert) => _openAlert(context, ref, workspace, alert),
@@ -40,13 +43,20 @@ class ProviderDashboardPage extends ConsumerWidget {
         onPublishedChanged: (service, value) =>
             _publication(context, ref, service, value),
         onDeleteService: (service) => _delete(context, ref, service),
-        onConversations: () => Navigator.of(
-          context,
-        ).push<void>(MaterialPageRoute(builder: (_) => const ChatListPage())),
-        onAccount: () => Navigator.of(
-          context,
-        ).push<void>(MaterialPageRoute(builder: (_) => const AccountPage())),
+        onAccount: () => onTabSelected(MainTab.account),
         onNotifications: () => _openNotifications(context, ref, workspace),
+        onRequests: () => onTabSelected(MainTab.requests),
+        onSchedule: () => Navigator.of(context).push<void>(
+          MaterialPageRoute(builder: (_) => const ProviderSchedulePage()),
+        ),
+        onAgenda: () => Navigator.of(context).push<void>(
+          MaterialPageRoute(builder: (_) => const ProviderAgendaPage()),
+        ),
+        onRequest: (request) => Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => ServiceRequestDetailsPage(requestId: request.id),
+          ),
+        ),
       ),
     );
   }
@@ -80,6 +90,8 @@ class ProviderDashboardPage extends ConsumerWidget {
                   id: notification.id,
                   title: notification.title,
                   body: notification.body,
+                  kind: notification.kind,
+                  data: notification.data,
                   read: notification.read,
                   createdAt: notification.createdAt,
                 ),
@@ -191,7 +203,7 @@ class _ProviderLoading extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const Scaffold(
     backgroundColor: AppColors.background,
-    body: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+    body: AppLoadingView(message: 'Preparando sua área profissional…'),
   );
 }
 

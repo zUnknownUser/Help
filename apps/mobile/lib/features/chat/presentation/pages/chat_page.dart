@@ -1,16 +1,25 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/design_system/foundations/app_colors.dart';
+import '../../../../core/design_system/components/app_loading.dart';
+import '../../../../core/logging/app_logger.dart';
+import '../../../calls/domain/entities/call_session.dart';
+import '../../../calls/presentation/pages/call_page.dart';
+import '../../../calls/presentation/providers/call_providers.dart';
 import '../../data/providers/chat_data_providers.dart';
 import '../../data/realtime/chat_realtime_coordinator.dart';
 import '../../domain/entities/chat_conversation.dart';
 import '../../domain/entities/chat_message.dart';
 import '../providers/chat_providers.dart';
-import '../widgets/chat_avatar.dart';
-import '../widgets/message_status_icon.dart';
+import '../widgets/chat_composer.dart';
+import '../widgets/chat_header.dart';
+import '../widgets/chat_message_bubble.dart';
+import '../widgets/chat_contact_sheet.dart';
+import '../widgets/conversation_access_view.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({required this.conversation, super.key});
@@ -25,23 +34,36 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   final _scroll = ScrollController();
   final _focus = FocusNode();
   Timer? _typingTimer;
+  ChatMessage? _editingMessage;
   bool _typingSent = false;
   bool _loadingOlder = false;
   bool _canLoadOlder = true;
   int _newMessages = 0;
   int _previousMaxSequence = 0;
   int _lastReadSent = 0;
+  bool _deciding = false;
+  bool _recording = false;
+  bool _recordingStarting = false;
+  bool _stopRecordingRequested = false;
+  Duration _recordingDuration = Duration.zero;
+  Timer? _recordingTimer;
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _initialSync());
+    if (widget.conversation.canMessage) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _initialSync());
+    }
   }
 
   @override
   void dispose() {
     _typingTimer?.cancel();
+    _recordingTimer?.cancel();
+    if (_recording || _recordingStarting) {
+      unawaited(ref.read(voiceRecorderProvider).cancel());
+    }
     if (_typingSent) {
       ref
           .read(chatRealtimeCoordinatorProvider)
@@ -55,14 +77,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    final conversation = _currentConversation();
     final messages = ref.watch(messagesProvider(widget.conversation.id));
     final typing =
         ref.watch(typingProvider(widget.conversation.id)).value ?? false;
-    final online =
+    final presence =
         ref
             .watch(userPresenceProvider(widget.conversation.otherUserId))
             .value ??
-        false;
+        PresenceEvent(userId: widget.conversation.otherUserId, online: false);
     final connection =
         ref.watch(realtimeConnectionProvider).value ??
         RealtimeConnectionStatus.disconnected;
@@ -70,118 +93,183 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       backgroundColor: const Color(0xFFF4F6F4),
       appBar: AppBar(
         titleSpacing: 0,
-        title: Row(
-          children: [
-            ChatAvatar(name: widget.conversation.otherDisplayName, radius: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.conversation.otherDisplayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  Text(
-                    typing
-                        ? 'digitando…'
-                        : online
-                        ? 'online'
-                        : connection == RealtimeConnectionStatus.connected
-                        ? 'offline'
-                        : 'conectando…',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: typing || online
-                          ? AppColors.primary
-                          : AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        title: ChatHeader(
+          name: conversation.otherDisplayName,
+          presence: presence,
+          connection: connection,
+          typing: typing,
+          onTap: () => showChatContactSheet(context, conversation),
         ),
-      ),
-      body: Stack(
-        children: [
-          messages.when(
-            data: (items) {
-              _afterMessages(items);
-              if (items.isEmpty) {
-                return const Center(child: Text('Envie a primeira mensagem.'));
-              }
-              return ListView.builder(
-                controller: _scroll,
-                reverse: true,
-                padding: const EdgeInsets.fromLTRB(12, 14, 12, 92),
-                itemCount: items.length + (_loadingOlder ? 1 : 0),
-                itemBuilder: (_, index) {
-                  if (index == items.length) {
-                    return const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    );
-                  }
-                  final message = items[items.length - 1 - index];
-                  return RepaintBoundary(
-                    key: ValueKey(message.clientId),
-                    child: _MessageBubble(
-                      message: message,
-                      mine:
-                          message.senderId ==
-                          ref.read(currentChatUserIdProvider),
-                      onRetry: message.status == ChatMessageStatus.failed
-                          ? () => ref
-                                .read(chatRealtimeCoordinatorProvider)
-                                .retry(message.clientId)
-                          : null,
-                    ),
-                  );
-                },
-              );
-            },
-            loading: () =>
-                const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            error: (_, _) => const Center(
-              child: Text('Não foi possível abrir as mensagens locais.'),
-            ),
-          ),
-          if (_newMessages > 0)
-            Positioned(
-              right: 16,
-              bottom: 86,
-              child: FloatingActionButton.small(
-                onPressed: _jumpToLatest,
-                child: Badge(
-                  label: Text('$_newMessages'),
-                  child: const Icon(Icons.keyboard_arrow_down_rounded),
+        actions: conversation.canMessage
+            ? [
+                IconButton(
+                  tooltip: 'Chamada de voz',
+                  onPressed: () => _startCall(CallMediaType.audio),
+                  icon: const Icon(Icons.call_outlined),
                 ),
-              ),
+                IconButton(
+                  tooltip: 'Chamada de video',
+                  onPressed: () => _startCall(CallMediaType.video),
+                  icon: const Icon(Icons.videocam_outlined),
+                ),
+              ]
+            : null,
+      ),
+      body: conversation.canMessage
+          ? Stack(
+              children: [
+                messages.when(
+                  data: _messageList,
+                  loading: () => const AppLoadingView(
+                    message: 'Abrindo mensagens…',
+                    compact: true,
+                  ),
+                  error: (_, _) => const Center(
+                    child: Text('Não foi possível abrir as mensagens locais.'),
+                  ),
+                ),
+                if (_newMessages > 0)
+                  Positioned(
+                    right: 16,
+                    bottom: 86,
+                    child: FloatingActionButton.small(
+                      onPressed: _jumpToLatest,
+                      child: Badge(
+                        label: Text('$_newMessages'),
+                        child: const Icon(Icons.keyboard_arrow_down_rounded),
+                      ),
+                    ),
+                  ),
+              ],
+            )
+          : ConversationAccessView(
+              conversation: conversation,
+              loading: _deciding,
+              onAccept: () => _decide(accept: true),
+              onDecline: _confirmDecline,
             ),
+      bottomSheet: conversation.canMessage
+          ? ChatComposer(
+              controller: _input,
+              focusNode: _focus,
+              onChanged: _onTyping,
+              onSend: _send,
+              editing: _editingMessage != null,
+              onCancelEdit: _cancelEditing,
+              recording: _recording,
+              recordingDuration: _recordingDuration,
+              onRecordStart: _startRecording,
+              onRecordStop: _stopRecording,
+              onRecordCancel: _cancelRecording,
+            )
+          : null,
+    );
+  }
+
+  ChatConversation _currentConversation() {
+    final values = ref.watch(conversationsProvider('')).value;
+    if (values != null) {
+      for (final conversation in values) {
+        if (conversation.id == widget.conversation.id) return conversation;
+      }
+    }
+    return widget.conversation;
+  }
+
+  Future<void> _decide({required bool accept}) async {
+    setState(() => _deciding = true);
+    try {
+      await ref
+          .read(chatRealtimeCoordinatorProvider)
+          .decideConversation(widget.conversation.id, accept: accept);
+      if (accept) unawaited(_initialSync());
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível responder à solicitação.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _deciding = false);
+    }
+  }
+
+  Future<void> _confirmDecline() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Recusar conversa?'),
+        content: const Text(
+          'A outra pessoa não poderá enviar mensagens para você.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Recusar'),
+          ),
         ],
       ),
-      bottomSheet: _Composer(
-        controller: _input,
-        focusNode: _focus,
-        onChanged: _onTyping,
-        onSend: _send,
-      ),
+    );
+    if (confirmed == true) await _decide(accept: false);
+  }
+
+  Widget _messageList(List<ChatMessage> items) {
+    _afterMessages(items);
+    if (items.isEmpty) {
+      return const Center(child: Text('Envie a primeira mensagem.'));
+    }
+    final currentUserId = ref.read(currentChatUserIdProvider);
+    return ListView.builder(
+      controller: _scroll,
+      reverse: true,
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 92),
+      itemCount: items.length + (_loadingOlder ? 1 : 0),
+      itemBuilder: (_, index) {
+        if (index == items.length) {
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(child: AppProgressIndicator()),
+          );
+        }
+        final message = items[items.length - 1 - index];
+        final mine = message.senderId == currentUserId;
+        return RepaintBoundary(
+          key: ValueKey(message.clientId),
+          child: ChatMessageBubble(
+            message: message,
+            mine: mine,
+            onRetry: message.status == ChatMessageStatus.failed
+                ? () => ref
+                      .read(chatRealtimeCoordinatorProvider)
+                      .retry(message.clientId)
+                : null,
+            onLongPress: mine && !message.isDeleted
+                ? () => _showMessageActions(message)
+                : null,
+          ),
+        );
+      },
     );
   }
 
   Future<void> _initialSync() async {
-    final loaded = await ref
-        .read(chatRealtimeCoordinatorProvider)
-        .loadOlder(widget.conversation.id);
-    if (mounted && !loaded) setState(() => _canLoadOlder = false);
+    try {
+      final loaded = await ref
+          .read(chatRealtimeCoordinatorProvider)
+          .loadOlder(widget.conversation.id);
+      if (mounted && !loaded) setState(() => _canLoadOlder = false);
+    } catch (_) {
+      AppLogger.realtime(
+        'history_initial_load_failed',
+        fields: {'conversation_id': widget.conversation.id},
+      );
+    }
   }
 
   void _afterMessages(List<ChatMessage> items) {
@@ -228,14 +316,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           0,
           (max, message) => message.sequence! > max ? message.sequence! : max,
         );
-    if (latestIncoming > _lastReadSent) {
-      _lastReadSent = latestIncoming;
-      unawaited(
-        ref
-            .read(chatRealtimeCoordinatorProvider)
-            .markRead(widget.conversation.id, latestIncoming),
-      );
-    }
+    if (latestIncoming <= _lastReadSent) return;
+    _lastReadSent = latestIncoming;
+    unawaited(
+      ref
+          .read(chatRealtimeCoordinatorProvider)
+          .markRead(widget.conversation.id, latestIncoming),
+    );
   }
 
   void _onScroll() {
@@ -246,32 +333,50 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         _markVisibleRead(messages, ref.read(currentChatUserIdProvider));
       }
     }
-    if (!_loadingOlder &&
-        _canLoadOlder &&
-        _scroll.hasClients &&
-        _scroll.position.extentAfter < 180) {
-      _loadingOlder = true;
-      ref
+    if (_loadingOlder ||
+        !_canLoadOlder ||
+        !_scroll.hasClients ||
+        _scroll.position.extentAfter >= 180) {
+      return;
+    }
+    setState(() => _loadingOlder = true);
+    unawaited(_loadOlder());
+  }
+
+  Future<void> _loadOlder() async {
+    try {
+      final loaded = await ref
           .read(chatRealtimeCoordinatorProvider)
-          .loadOlder(widget.conversation.id)
-          .then((loaded) {
-            if (mounted && !loaded) setState(() => _canLoadOlder = false);
-          })
-          .whenComplete(() {
-            if (mounted) setState(() => _loadingOlder = false);
-          });
+          .loadOlder(widget.conversation.id);
+      if (mounted && !loaded) setState(() => _canLoadOlder = false);
+    } catch (_) {
+      AppLogger.realtime(
+        'history_page_load_failed',
+        fields: {'conversation_id': widget.conversation.id},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível carregar mensagens antigas.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingOlder = false);
     }
   }
 
   bool get _atBottom => !_scroll.hasClients || _scroll.offset < 80;
 
   void _jumpToLatest() {
-    _scroll.animateTo(
-      0,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
-    setState(() => _newMessages = 0);
+    if (_scroll.hasClients) {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    }
+    if (_newMessages > 0) setState(() => _newMessages = 0);
   }
 
   void _onTyping(String value) {
@@ -291,6 +396,186 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final content = _input.text.trim();
     if (content.isEmpty) return;
     _input.clear();
+    _stopTyping();
+    final editing = _editingMessage;
+    if (editing == null) {
+      await ref
+          .read(chatRealtimeCoordinatorProvider)
+          .send(widget.conversation.id, content);
+    } else {
+      setState(() => _editingMessage = null);
+      if (content != editing.content) {
+        await ref.read(chatRealtimeCoordinatorProvider).edit(editing, content);
+      }
+    }
+    _jumpToLatest();
+  }
+
+  Future<void> _startCall(CallMediaType mediaType) async {
+    try {
+      final start = ref
+          .read(callSessionControllerProvider)
+          .startOutgoing(_currentConversation(), mediaType);
+      if (!mounted) return;
+      final route = Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => const CallPage(),
+        ),
+      );
+      await start;
+      await route;
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nao foi possivel iniciar a chamada agora.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _startRecording() async {
+    if (_recording || _recordingStarting) return;
+    _focus.unfocus();
+    _recordingStarting = true;
+    _stopRecordingRequested = false;
+    try {
+      await ref.read(voiceRecorderProvider).start();
+      if (!mounted) return;
+      setState(() {
+        _recording = true;
+        _recordingDuration = Duration.zero;
+      });
+      _recordingTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+        if (!mounted) return;
+        final elapsed = ref.read(voiceRecorderProvider).elapsed;
+        setState(() => _recordingDuration = elapsed);
+        if (elapsed >= const Duration(minutes: 5)) unawaited(_stopRecording());
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Permita o uso do microfone para gravar audios.'),
+          ),
+        );
+      }
+    } finally {
+      _recordingStarting = false;
+    }
+    if (_stopRecordingRequested) await _stopRecording();
+  }
+
+  Future<void> _stopRecording() async {
+    if (_recordingStarting) {
+      _stopRecordingRequested = true;
+      return;
+    }
+    if (!_recording) return;
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+    setState(() => _recording = false);
+    final voice = await ref.read(voiceRecorderProvider).stop();
+    if (voice == null) return;
+    if (voice.duration < const Duration(milliseconds: 500)) {
+      try {
+        await File(voice.path).delete();
+      } catch (_) {}
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Segure um pouco mais para gravar.')),
+        );
+      }
+      return;
+    }
+    await ref
+        .read(chatRealtimeCoordinatorProvider)
+        .sendVoice(
+          widget.conversation.id,
+          localPath: voice.path,
+          duration: voice.duration,
+        );
+    _jumpToLatest();
+  }
+
+  Future<void> _cancelRecording() async {
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+    if (mounted) {
+      setState(() {
+        _recording = false;
+        _recordingDuration = Duration.zero;
+      });
+    }
+    await ref.read(voiceRecorderProvider).cancel();
+  }
+
+  Future<void> _showMessageActions(ChatMessage message) async {
+    final action = await showModalBottomSheet<_MessageAction>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            if (!message.isVoice)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Editar mensagem'),
+                onTap: () => Navigator.pop(context, _MessageAction.edit),
+              ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded),
+              title: const Text('Apagar mensagem'),
+              textColor: AppColors.danger,
+              iconColor: AppColors.danger,
+              onTap: () => Navigator.pop(context, _MessageAction.delete),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == _MessageAction.edit) {
+      setState(() => _editingMessage = message);
+      _input.text = message.content;
+      _input.selection = TextSelection.collapsed(offset: _input.text.length);
+      _focus.requestFocus();
+    } else if (action == _MessageAction.delete) {
+      await _confirmDelete(message);
+    }
+  }
+
+  Future<void> _confirmDelete(ChatMessage message) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Apagar mensagem?'),
+        content: const Text(
+          'Ela será substituída por “Mensagem apagada” para todos na conversa.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Apagar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await ref.read(chatRealtimeCoordinatorProvider).delete(message);
+    }
+  }
+
+  void _cancelEditing() {
+    _input.clear();
+    setState(() => _editingMessage = null);
+  }
+
+  void _stopTyping() {
     _typingTimer?.cancel();
     if (_typingSent) {
       ref
@@ -298,125 +583,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           .typing(widget.conversation.id, false);
     }
     _typingSent = false;
-    await ref
-        .read(chatRealtimeCoordinatorProvider)
-        .send(widget.conversation.id, content);
-    _jumpToLatest();
   }
 }
 
-class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({
-    required this.message,
-    required this.mine,
-    this.onRetry,
-  });
-  final ChatMessage message;
-  final bool mine;
-  final VoidCallback? onRetry;
-
-  @override
-  Widget build(BuildContext context) => Align(
-    alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-    child: GestureDetector(
-      onTap: onRetry,
-      child: Container(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.sizeOf(context).width * .78,
-        ),
-        margin: const EdgeInsets.only(bottom: 6),
-        padding: const EdgeInsets.fromLTRB(11, 8, 8, 6),
-        decoration: BoxDecoration(
-          color: mine ? const Color(0xFFDDF2E3) : AppColors.surface,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(14),
-            topRight: const Radius.circular(14),
-            bottomLeft: Radius.circular(mine ? 14 : 3),
-            bottomRight: Radius.circular(mine ? 3 : 14),
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x10000000),
-              blurRadius: 3,
-              offset: Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Flexible(
-              child: Text(
-                message.content,
-                style: const TextStyle(fontSize: 14, height: 1.3),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              _time(message.displayedAt),
-              style: const TextStyle(
-                fontSize: 9,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            if (mine) ...[
-              const SizedBox(width: 3),
-              MessageStatusIcon(status: message.status, size: 13),
-            ],
-          ],
-        ),
-      ),
-    ),
-  );
-
-  String _time(DateTime value) =>
-      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
-}
-
-class _Composer extends StatelessWidget {
-  const _Composer({
-    required this.controller,
-    required this.focusNode,
-    required this.onChanged,
-    required this.onSend,
-  });
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onSend;
-
-  @override
-  Widget build(BuildContext context) => SafeArea(
-    top: false,
-    child: Container(
-      color: AppColors.surface,
-      padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              onChanged: onChanged,
-              minLines: 1,
-              maxLines: 5,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                hintText: 'Mensagem',
-                prefixIcon: Icon(Icons.sentiment_satisfied_alt_outlined),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton.filled(
-            tooltip: 'Enviar',
-            onPressed: onSend,
-            icon: const Icon(Icons.send_rounded),
-          ),
-        ],
-      ),
-    ),
-  );
-}
+enum _MessageAction { edit, delete }

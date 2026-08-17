@@ -21,6 +21,7 @@ func TestSearchWithLocationReturnsEmptyPageWithoutListings(t *testing.T) {
 	}
 	defer pool.Close()
 	latitude, longitude, radius := -3.0816211, -59.9779892, 30.0
+	missingCategory := "missing-category-for-empty-catalog-test"
 
 	for _, test := range []struct {
 		name   string
@@ -37,7 +38,7 @@ func TestSearchWithLocationReturnsEmptyPageWithoutListings(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			page, err := NewRepository(pool).Search(context.Background(), domaincatalog.Filters{
 				Latitude: &latitude, Longitude: &longitude, RadiusKM: &radius,
-				Cursor: test.cursor, Limit: 20,
+				CategoryID: missingCategory, Cursor: test.cursor, Limit: 20,
 			})
 
 			if err != nil {

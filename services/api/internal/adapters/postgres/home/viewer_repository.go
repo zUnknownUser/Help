@@ -14,11 +14,13 @@ import (
 type ViewerRepository struct{ pool *pgxpool.Pool }
 
 type notificationRow struct {
-	ID        string     `json:"id"`
-	Title     string     `json:"title"`
-	Body      string     `json:"body"`
-	ReadAt    *time.Time `json:"read_at"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID        string            `json:"id"`
+	Title     string            `json:"title"`
+	Body      string            `json:"body"`
+	Kind      string            `json:"kind"`
+	Data      map[string]string `json:"data"`
+	ReadAt    *time.Time        `json:"read_at"`
+	CreatedAt time.Time         `json:"created_at"`
 }
 
 func NewViewerRepository(pool *pgxpool.Pool) *ViewerRepository {
@@ -41,10 +43,11 @@ func (repository *ViewerRepository) GetViewer(
 			COALESCE((
 				SELECT jsonb_agg(jsonb_build_object(
 					'id', n.id, 'title', n.title, 'body', n.body,
+					'kind', n.kind, 'data', n.data,
 					'read_at', n.read_at, 'created_at', n.created_at
 				) ORDER BY n.created_at DESC)
 				FROM (
-					SELECT id, title, body, read_at, created_at
+					SELECT id, title, body, kind, data, read_at, created_at
 					FROM notifications
 					WHERE firebase_uid = $1
 					ORDER BY created_at DESC
@@ -68,6 +71,7 @@ func (repository *ViewerRepository) GetViewer(
 	for _, row := range rows {
 		viewer.Notifications = append(viewer.Notifications, domainhome.Notification{
 			ID: row.ID, Title: row.Title, Body: row.Body,
+			Kind: row.Kind, Data: row.Data,
 			Read: row.ReadAt != nil, CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339),
 		})
 	}

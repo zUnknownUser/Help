@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -51,12 +52,15 @@ func (repository *Repository) advanceReceipt(
 		FROM conversations conversation
 		WHERE member.conversation_id = conversation.id
 		  AND member.conversation_id = $1::uuid
-		  AND member.firebase_uid = $2`, conversationID, userID, sequence)
+		  AND member.firebase_uid = $2
+		  AND conversation.status = 'accepted'`, conversationID, userID, sequence)
 	if err != nil {
 		return nil, fmt.Errorf("advance chat receipt: %w", err)
 	}
 	if command.RowsAffected() == 0 {
-		return nil, domainchat.ErrForbidden
+		return nil, conversationAccessError(
+			ctx, repository.pool, userID, conversationID,
+		)
 	}
 	return repository.ConversationRecipients(ctx, userID, conversationID)
 }
@@ -70,6 +74,7 @@ func (repository *Repository) ConversationRecipients(
 
 type rowsQuerier interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
 func conversationRecipients(
@@ -80,6 +85,9 @@ func conversationRecipients(
 	rows, err := query.Query(ctx, `
 		SELECT recipient.firebase_uid
 		FROM conversation_members member
+		JOIN conversations conversation
+		  ON conversation.id = member.conversation_id
+		 AND conversation.status = 'accepted'
 		JOIN conversation_members recipient
 		  ON recipient.conversation_id = member.conversation_id
 		 AND recipient.firebase_uid <> member.firebase_uid
@@ -101,9 +109,36 @@ func conversationRecipients(
 		return nil, fmt.Errorf("iterate conversation recipients: %w", err)
 	}
 	if recipients == nil {
-		return nil, domainchat.ErrForbidden
+		return nil, conversationAccessError(ctx, query, userID, conversationID)
 	}
 	return recipients, nil
+}
+
+func conversationAccessError(
+	ctx context.Context,
+	query interface {
+		QueryRow(context.Context, string, ...any) pgx.Row
+	},
+	userID, conversationID string,
+) error {
+	var status domainchat.ConversationStatus
+	err := query.QueryRow(ctx, `
+		SELECT conversation.status
+		FROM conversations conversation
+		JOIN conversation_members member ON member.conversation_id = conversation.id
+		WHERE conversation.id = $1::uuid AND member.firebase_uid = $2`,
+		conversationID, userID,
+	).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domainchat.ErrForbidden
+	}
+	if err != nil {
+		return fmt.Errorf("check conversation access: %w", err)
+	}
+	if status != domainchat.ConversationAccepted {
+		return domainchat.ErrConversationPending
+	}
+	return domainchat.ErrForbidden
 }
 
 func (repository *Repository) requireMember(ctx context.Context, userID, conversationID string) error {
@@ -122,22 +157,47 @@ func (repository *Repository) requireMember(ctx context.Context, userID, convers
 	return nil
 }
 
-func (repository *Repository) UserPeers(ctx context.Context, userID string) ([]string, error) {
+func (repository *Repository) UpdateLastSeen(
+	ctx context.Context,
+	userID string,
+) (time.Time, error) {
+	var lastSeen time.Time
+	err := repository.pool.QueryRow(ctx, `UPDATE user_profiles
+		SET last_seen_at = now(), updated_at = now()
+		WHERE firebase_uid = $1
+		RETURNING last_seen_at`, userID).Scan(&lastSeen)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, domainchat.ErrForbidden
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("update chat last seen: %w", err)
+	}
+	return lastSeen, nil
+}
+
+func (repository *Repository) UserPeerPresences(
+	ctx context.Context,
+	userID string,
+) ([]domainchat.Presence, error) {
 	rows, err := repository.pool.Query(ctx, `
-		SELECT DISTINCT peer.firebase_uid
+		SELECT DISTINCT peer.firebase_uid, profile.last_seen_at
 		FROM conversation_members member
 		JOIN conversation_members peer
 		  ON peer.conversation_id = member.conversation_id
 		 AND peer.firebase_uid <> member.firebase_uid
+		JOIN user_profiles profile ON profile.firebase_uid = peer.firebase_uid
+		JOIN conversations conversation
+		  ON conversation.id = member.conversation_id
+		 AND conversation.status = 'accepted'
 		WHERE member.firebase_uid = $1`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("query chat peers: %w", err)
 	}
 	defer rows.Close()
-	var peers []string
+	var peers []domainchat.Presence
 	for rows.Next() {
-		var peer string
-		if err := rows.Scan(&peer); err != nil {
+		var peer domainchat.Presence
+		if err := rows.Scan(&peer.UserID, &peer.LastSeenAt); err != nil {
 			return nil, err
 		}
 		peers = append(peers, peer)

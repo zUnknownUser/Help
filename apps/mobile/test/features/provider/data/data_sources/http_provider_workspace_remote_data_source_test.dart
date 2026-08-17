@@ -30,6 +30,8 @@ void main() {
     expect(captured.url.toString(), 'https://api.example.com/v1/provider/home');
     expect(workspace.provider.displayName, 'Luis');
     expect(workspace.services.single.title, 'Limpeza residencial');
+    expect(workspace.recentRequests.single.quotedPriceCents, 15000);
+    expect(workspace.recentRequests.single.address, 'Rua A, 10');
   });
 
   test('envia criação de serviço pelo contrato autenticável da API', () async {
@@ -105,7 +107,19 @@ const _homeResponse = {
     'alerts': <Object?>[],
     'categories': <Object?>[],
     'services': [_service],
-    'recent_requests': <Object?>[],
+    'recent_requests': [
+      {
+        'id': 'request-1',
+        'service_title': 'Limpeza residencial',
+        'customer_name': 'Cliente',
+        'status': 'pending',
+        'note': '',
+        'quoted_price_cents': 15000,
+        'address': 'Rua A, 10',
+        'scheduled_for': '2026-08-17T15:00:00Z',
+        'created_at': '2026-08-16T15:00:00Z',
+      },
+    ],
     'notifications': <Object?>[],
   },
 };

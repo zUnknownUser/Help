@@ -49,12 +49,72 @@ class ChatRemoteApi {
     return _getPage(uri, ChatWireMapper.message);
   }
 
+  Future<ChatMedia> uploadVoice(
+    String conversationId, {
+    required File file,
+    required int durationMs,
+  }) async {
+    final request = http.StreamedRequest(
+      'POST',
+      Uri.parse(
+        '$_baseUrl/v1/chat/conversations/'
+        '${Uri.encodeComponent(conversationId)}/voice-media',
+      ),
+    );
+    request.headers.addAll({
+      'Content-Type': 'audio/mp4',
+      'X-Voice-Duration-Ms': '$durationMs',
+    });
+    request.contentLength = await file.length();
+    file.openRead().listen(
+      request.sink.add,
+      onError: request.sink.addError,
+      onDone: request.sink.close,
+      cancelOnError: true,
+    );
+    final streamed = await _client
+        .send(request)
+        .timeout(const Duration(seconds: 30));
+    final response = await http.Response.fromStream(streamed);
+    final envelope = _decode(response);
+    final json = Map<String, dynamic>.from(envelope['data'] as Map);
+    return ChatMedia(
+      id: json['id'] as String,
+      contentType: json['content_type'] as String,
+      byteSize: json['byte_size'] as int,
+      durationMs: json['duration_ms'] as int,
+    );
+  }
+
+  Uri mediaUri(String mediaId) =>
+      Uri.parse('$_baseUrl/v1/chat/media/${Uri.encodeComponent(mediaId)}');
+
   Future<ChatConversation> direct(String otherUserId) async {
     final response = await _client
         .post(
           Uri.parse('$_baseUrl/v1/chat/conversations/direct'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'other_user_id': otherUserId}),
+        )
+        .timeout(const Duration(seconds: 8));
+    final envelope = _decode(response);
+    return ChatWireMapper.conversation(
+      Map<String, dynamic>.from(envelope['data'] as Map),
+    );
+  }
+
+  Future<ChatConversation> decide(
+    String conversationId, {
+    required bool accept,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse(
+            '$_baseUrl/v1/chat/conversations/'
+            '${Uri.encodeComponent(conversationId)}/decision',
+          ),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'decision': accept ? 'accept' : 'decline'}),
         )
         .timeout(const Duration(seconds: 8));
     final envelope = _decode(response);

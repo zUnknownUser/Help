@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/design_system/components/app_button.dart';
 import '../../../../core/design_system/foundations/app_colors.dart';
 import '../../domain/failures/home_failure.dart';
-import 'home_nav_bar.dart';
 
 class HomeErrorView extends StatelessWidget {
   const HomeErrorView({
@@ -56,7 +55,6 @@ class HomeErrorView extends StatelessWidget {
           ),
         ),
       ),
-      bottomNavigationBar: const HomeNavBar(),
     );
   }
 }

@@ -22,6 +22,14 @@ type CatalogSearcher interface {
 	Search(context.Context, catalog.Filters) (catalog.Page, error)
 }
 
+type ServiceDetailsReader interface {
+	FindDetails(context.Context, string, string) (catalog.Details, error)
+}
+
+type ServiceDetailsGetter interface {
+	Execute(context.Context, string, string) (catalog.Details, error)
+}
+
 type PromotionReader interface {
 	ListActive(ctx context.Context) ([]promotions.Promotion, error)
 }

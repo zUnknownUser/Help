@@ -132,6 +132,8 @@ class ProviderRequest {
     required this.customerName,
     required this.status,
     required this.note,
+    required this.quotedPriceCents,
+    required this.address,
     required this.createdAt,
     this.scheduledFor,
   });
@@ -140,6 +142,8 @@ class ProviderRequest {
   final String customerName;
   final String status;
   final String note;
+  final int quotedPriceCents;
+  final String address;
   final DateTime createdAt;
   final DateTime? scheduledFor;
 }
@@ -149,12 +153,16 @@ class ProviderNotification {
     required this.id,
     required this.title,
     required this.body,
+    this.kind = '',
+    this.data = const {},
     required this.read,
     required this.createdAt,
   });
   final String id;
   final String title;
   final String body;
+  final String kind;
+  final Map<String, String> data;
   final bool read;
   final DateTime createdAt;
 }

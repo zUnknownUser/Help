@@ -6,45 +6,54 @@ import 'home_image.dart';
 import 'service_card_details.dart';
 
 class ServiceCard extends StatelessWidget {
-  const ServiceCard({required this.offer, super.key});
+  const ServiceCard({required this.offer, this.onTap, super.key});
 
   final ServiceOffer offer;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 177,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: AppColors.outline),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
+    return Semantics(
+      button: onTap != null,
+      label: onTap == null ? null : 'Ver detalhes de ${offer.title}',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: 177,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: AppColors.outline),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0A000000),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: 94,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                HomeImage(
-                  imageUrl: offer.imageUrl,
-                  alignment: Alignment(offer.imageAlignment, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 94,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    HomeImage(
+                      imageUrl: offer.imageUrl,
+                      alignment: Alignment(offer.imageAlignment, 0),
+                    ),
+                    if (offer.badge case final badge?) _Badge(label: badge),
+                  ],
                 ),
-                if (offer.badge case final badge?) _Badge(label: badge),
-              ],
-            ),
+              ),
+              Expanded(child: ServiceCardDetails(offer: offer)),
+            ],
           ),
-          Expanded(child: ServiceCardDetails(offer: offer)),
-        ],
+        ),
       ),
     );
   }

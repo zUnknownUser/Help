@@ -48,6 +48,7 @@ app.*.map.json
 **/coverage/
 **/.gocache/
 **/.tmp/
+.go-tmp/
 **/node_modules/
 
 .env
