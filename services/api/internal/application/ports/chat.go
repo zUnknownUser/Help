@@ -47,11 +47,13 @@ type MediaObject struct {
 	ModifiedAt  time.Time
 }
 
-type ChatMediaStore interface {
+type MediaStore interface {
 	Save(context.Context, string, io.Reader, int64) (StoredMedia, error)
 	Open(context.Context, string, string) (MediaObject, error)
 	Delete(context.Context, string) error
 }
+
+type ChatMediaStore = MediaStore
 
 type RealtimeEvent struct {
 	Type string `json:"type"`

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help/features/service_requests/data/service_request_remote_api.dart';
 import 'package:help/features/service_requests/domain/entities/service_request_item.dart';
+import 'package:help/features/service_requests/domain/entities/service_request_negotiation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -89,7 +90,159 @@ void main() {
     expect(captured.queryParameters['limit'], '500');
     expect(items.single.status, ServiceRequestStatus.accepted);
   });
+
+  test('parses private attachments and itemized quote negotiation', () async {
+    final api = ServiceRequestRemoteApi(
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'data': {
+              'request': _requestJson(status: 'pending', version: 0),
+              'negotiation': _negotiationJson(),
+            },
+          }),
+          200,
+        ),
+      ),
+      baseUrl: 'http://localhost:8080',
+    );
+
+    final update = await api.negotiation('request-1');
+
+    expect(update.negotiation.attachments.single.canDelete, isTrue);
+    expect(update.negotiation.latestQuote?.totalCents, 17500);
+    expect(
+      update.negotiation.latestQuote?.items.last.kind,
+      ServiceQuoteItemKind.discount,
+    );
+    expect(update.negotiation.canPropose, isFalse);
+  });
+
+  test('sends versioned itemized counteroffer contract', () async {
+    late http.Request captured;
+    final api = ServiceRequestRemoteApi(
+      client: MockClient((request) async {
+        captured = request;
+        return http.Response(
+          jsonEncode({
+            'data': {
+              'request': _requestJson(status: 'pending', version: 0),
+              'negotiation': _negotiationJson(),
+            },
+          }),
+          201,
+        );
+      }),
+      baseUrl: 'http://localhost:8080',
+    );
+    final expiry = DateTime.utc(2026, 8, 26, 12);
+
+    await api.proposeQuote(
+      request: ServiceRequestItemModelForTest.entity,
+      clientCommandId: 'quote-command',
+      draft: ServiceQuoteDraft(
+        expiresAt: expiry,
+        message: 'Inclui material',
+        items: const [
+          ServiceQuoteItemDraft(
+            kind: ServiceQuoteItemKind.material,
+            description: 'Resistência',
+            amountCents: 7500,
+          ),
+        ],
+      ),
+    );
+
+    final body = jsonDecode(captured.body) as Map<String, dynamic>;
+    final items = body['items'] as List<dynamic>;
+    expect(captured.url.path, '/v1/service-requests/request-1/quotes');
+    expect(body['expected_version'], 0);
+    expect(body['expires_at'], expiry.toIso8601String());
+    expect((items.single as Map<String, dynamic>)['kind'], 'material');
+  });
 }
+
+abstract final class ServiceRequestItemModelForTest {
+  static final entity = ServiceRequestItem(
+    id: 'request-1',
+    clientRequestId: 'client-1',
+    serviceId: 'service-1',
+    serviceTitle: 'Limpeza',
+    providerUserId: 'provider-user',
+    providerName: 'Luis',
+    customerName: 'Ana',
+    customerUserId: 'customer-user',
+    viewerRole: RequestViewerRole.provider,
+    status: ServiceRequestStatus.pending,
+    statusReason: '',
+    version: 0,
+    availableActions: const {},
+    note: '',
+    scheduledFor: DateTime.utc(2026, 8, 17, 15),
+    quotedPriceCents: 15000,
+    addressLabel: 'Casa',
+    address: 'Rua A, 10',
+    createdAt: DateTime.utc(2026, 8, 16, 12),
+    updatedAt: DateTime.utc(2026, 8, 16, 12),
+  );
+}
+
+Map<String, dynamic> _negotiationJson() => {
+  'attachments': [
+    {
+      'id': 'attachment-1',
+      'uploader_name': 'Luis',
+      'uploader_role': 'provider',
+      'caption': 'Antes',
+      'content_type': 'image/jpeg',
+      'byte_size': 1200,
+      'url': '/v1/service-request-attachments/attachment-1',
+      'created_at': '2026-08-19T12:00:00Z',
+      'can_delete': true,
+    },
+  ],
+  'quotes': [
+    {
+      'id': 'quote-1',
+      'author_name': 'Luis',
+      'author_role': 'provider',
+      'revision': 1,
+      'status': 'proposed',
+      'currency': 'BRL',
+      'total_cents': 17500,
+      'message': 'Inclui material',
+      'items': [
+        {
+          'id': 'item-1',
+          'kind': 'labor',
+          'description': 'Mão de obra',
+          'amount_cents': 15000,
+          'position': 0,
+        },
+        {
+          'id': 'item-2',
+          'kind': 'material',
+          'description': 'Material',
+          'amount_cents': 5000,
+          'position': 1,
+        },
+        {
+          'id': 'item-3',
+          'kind': 'discount',
+          'description': 'Desconto',
+          'amount_cents': 2500,
+          'position': 2,
+        },
+      ],
+      'expires_at': '2026-08-26T12:00:00Z',
+      'accepted_at': null,
+      'created_at': '2026-08-19T12:00:00Z',
+      'can_accept': false,
+    },
+  ],
+  'can_add_attachment': true,
+  'can_propose': false,
+};
 
 Map<String, dynamic> _requestJson({
   required String status,

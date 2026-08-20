@@ -209,6 +209,125 @@ func TestLifecycleTransitionIsAuthorizedVersionedAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestNegotiationAlternatesQuotesAndAcceptsAtomically(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL not configured")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	providerUID := "provider-" + uuid.NewString()
+	customerUID := "customer-" + uuid.NewString()
+	providerID, serviceID := uuid.NewString(), uuid.NewString()
+	defer func() {
+		pool.Exec(context.Background(), `DELETE FROM service_requests WHERE service_id = $1`, serviceID)
+		pool.Exec(context.Background(), `DELETE FROM notifications WHERE firebase_uid IN ($1, $2)`, providerUID, customerUID)
+		pool.Exec(context.Background(), `DELETE FROM services WHERE id = $1`, serviceID)
+		pool.Exec(context.Background(), `DELETE FROM providers WHERE id = $1`, providerID)
+		pool.Exec(context.Background(), `DELETE FROM user_profiles WHERE firebase_uid IN ($1, $2)`, providerUID, customerUID)
+	}()
+	seedCheckoutUser(t, pool, providerUID, "Prestador", "provider")
+	seedCheckoutUser(t, pool, customerUID, "Cliente", "customer")
+	execCheckoutSQL(t, pool, `INSERT INTO providers (id, name, active, accepting_requests, owner_uid, onboarding_status)
+		VALUES ($1, 'Prestador', true, true, $2, 'approved')`, providerID, providerUID)
+	seedCheckoutSchedule(t, pool, providerID)
+	execCheckoutSQL(t, pool, `INSERT INTO services (id, provider_id, title, description, rating, reviews, duration_minutes,
+		price_cents, old_price_cents, active, published_at) VALUES ($1, $2, 'Reparo', '', 0, 0, 60, 10000, NULL, true, now())`, serviceID, providerID)
+
+	repository := NewRepository(pool)
+	requestDraft, _ := domainrequests.NewDraft(
+		uuid.NewString(), time.Now().UTC().Add(2*time.Hour).Truncate(15*time.Minute), "",
+	)
+	created, err := repository.Create(ctx, customerUID, serviceID, requestDraft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	providerQuote, _ := domainrequests.NewQuoteDraft(
+		uuid.NewString(), "Inclui material", created.Version, nil,
+		[]domainrequests.QuoteItemDraft{
+			{Kind: "labor", Description: "Mão de obra", AmountCents: 12000},
+			{Kind: "material", Description: "Material", AmountCents: 3000},
+		}, now,
+	)
+	_, firstNegotiation, recipient, err := repository.ProposeQuote(
+		ctx, providerUID, created.ID, providerQuote,
+	)
+	if err != nil || recipient != customerUID || len(firstNegotiation.Quotes) != 1 {
+		t.Fatalf("first negotiation = %+v, recipient = %q, error = %v", firstNegotiation, recipient, err)
+	}
+	if _, _, _, err = repository.ProposeQuote(ctx, providerUID, created.ID, providerQuote); err != nil {
+		t.Fatalf("idempotent proposal error = %v", err)
+	}
+	secondProviderQuote, _ := domainrequests.NewQuoteDraft(
+		uuid.NewString(), "Outra proposta", created.Version, nil,
+		[]domainrequests.QuoteItemDraft{{Kind: "labor", Description: "Mão de obra", AmountCents: 14000}}, now,
+	)
+	if _, _, _, err = repository.ProposeQuote(ctx, providerUID, created.ID, secondProviderQuote); !errors.Is(err, domainrequests.ErrNegotiationTurn) {
+		t.Fatalf("same-side proposal error = %v", err)
+	}
+	confirmed, err := repository.Transition(ctx, providerUID, created.ID, domainrequests.Transition{
+		ClientID: uuid.NewString(), Target: domainrequests.StatusAccepted, ExpectedVersion: created.Version,
+	})
+	if err != nil {
+		t.Fatalf("confirm request error = %v", err)
+	}
+	if _, err = repository.Transition(ctx, providerUID, created.ID, domainrequests.Transition{
+		ClientID: uuid.NewString(), Target: domainrequests.StatusInProgress, ExpectedVersion: confirmed.Version,
+	}); !errors.Is(err, domainrequests.ErrQuotePending) {
+		t.Fatalf("pending quote start error = %v", err)
+	}
+
+	attachment, attachmentRecipient, err := repository.CreateAttachment(ctx, providerUID, created.ID, domainrequests.Attachment{
+		StorageKey: "request-" + uuid.NewString() + ".jpg", ContentType: "image/jpeg", ByteSize: 1200,
+	})
+	if err != nil || attachmentRecipient != customerUID {
+		t.Fatalf("attachment = %+v, recipient = %q, error = %v", attachment, attachmentRecipient, err)
+	}
+	if _, err = repository.GetAttachment(ctx, customerUID, attachment.ID); err != nil {
+		t.Fatalf("participant attachment read error = %v", err)
+	}
+	if _, _, err = repository.DeleteAttachment(ctx, customerUID, created.ID, attachment.ID); !errors.Is(err, domainrequests.ErrNotFound) {
+		t.Fatalf("other participant delete error = %v", err)
+	}
+	if _, _, err = repository.DeleteAttachment(ctx, providerUID, created.ID, attachment.ID); err != nil {
+		t.Fatalf("uploader delete error = %v", err)
+	}
+
+	customerQuote, _ := domainrequests.NewQuoteDraft(
+		uuid.NewString(), "Sem adicional", confirmed.Version, nil,
+		[]domainrequests.QuoteItemDraft{{Kind: "labor", Description: "Valor combinado", AmountCents: 13000}}, now,
+	)
+	_, counterNegotiation, _, err := repository.ProposeQuote(ctx, customerUID, created.ID, customerQuote)
+	if err != nil || len(counterNegotiation.Quotes) != 2 || counterNegotiation.Quotes[1].Status != domainrequests.QuoteSuperseded {
+		t.Fatalf("counter negotiation = %+v, error = %v", counterNegotiation, err)
+	}
+	acceptedQuoteID := counterNegotiation.Quotes[0].ID
+	acceptCommandID := uuid.NewString()
+	accepted, acceptedNegotiation, _, err := repository.AcceptQuote(
+		ctx, providerUID, created.ID, acceptedQuoteID, acceptCommandID, confirmed.Version, now,
+	)
+	if err != nil || accepted.Status != domainrequests.StatusAccepted || accepted.Version != 2 || accepted.QuotedPriceCents != 13000 || acceptedNegotiation.Quotes[0].Status != domainrequests.QuoteAccepted {
+		t.Fatalf("accepted = %+v, negotiation = %+v, error = %v", accepted, acceptedNegotiation, err)
+	}
+	retried, _, retryRecipient, err := repository.AcceptQuote(
+		ctx, providerUID, created.ID, acceptedQuoteID, acceptCommandID, confirmed.Version, now,
+	)
+	if err != nil || retried.Version != accepted.Version || retryRecipient != "" {
+		t.Fatalf("retried = %+v, recipient = %q, error = %v", retried, retryRecipient, err)
+	}
+	started, err := repository.Transition(ctx, providerUID, created.ID, domainrequests.Transition{
+		ClientID: uuid.NewString(), Target: domainrequests.StatusInProgress, ExpectedVersion: accepted.Version,
+	})
+	if err != nil || started.Status != domainrequests.StatusInProgress {
+		t.Fatalf("started = %+v, error = %v", started, err)
+	}
+}
+
 func seedCheckoutUser(t *testing.T, pool *pgxpool.Pool, uid, name, role string) {
 	t.Helper()
 	execCheckoutSQL(t, pool, `INSERT INTO user_profiles (firebase_uid, email, display_name, active_role)

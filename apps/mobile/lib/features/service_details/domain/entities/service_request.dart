@@ -21,6 +21,7 @@ class ServiceRequestReceipt {
     required this.scheduledFor,
     required this.quotedPriceCents,
     required this.address,
+    this.attachmentUploadFailures = 0,
   });
 
   final String id;
@@ -32,4 +33,20 @@ class ServiceRequestReceipt {
   final DateTime scheduledFor;
   final int quotedPriceCents;
   final String address;
+  final int attachmentUploadFailures;
+
+  ServiceRequestReceipt copyWith({int? attachmentUploadFailures}) =>
+      ServiceRequestReceipt(
+        id: id,
+        clientRequestId: clientRequestId,
+        serviceId: serviceId,
+        serviceTitle: serviceTitle,
+        providerName: providerName,
+        status: status,
+        scheduledFor: scheduledFor,
+        quotedPriceCents: quotedPriceCents,
+        address: address,
+        attachmentUploadFailures:
+            attachmentUploadFailures ?? this.attachmentUploadFailures,
+      );
 }

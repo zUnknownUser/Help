@@ -4,7 +4,9 @@ import '../../../../core/design_system/components/app_button.dart';
 import '../../../../core/design_system/components/app_error_state.dart';
 import '../../../../core/design_system/foundations/app_colors.dart';
 import '../../domain/entities/service_request_item.dart';
+import '../../domain/entities/service_request_negotiation.dart';
 import 'request_status_badge.dart';
+import 'service_request_negotiation_card.dart';
 import 'service_request_tile.dart';
 import '../../../reviews/presentation/service_review_card.dart';
 
@@ -14,6 +16,13 @@ class ServiceRequestDetailsView extends StatelessWidget {
     required this.acting,
     required this.onAction,
     required this.onChat,
+    required this.negotiationLoading,
+    required this.onNegotiationRetry,
+    required this.onQuote,
+    required this.onAcceptQuote,
+    required this.onAddAttachment,
+    required this.onDeleteAttachment,
+    this.negotiation,
     this.onReschedule,
     super.key,
   });
@@ -22,6 +31,13 @@ class ServiceRequestDetailsView extends StatelessWidget {
   final bool acting;
   final ValueChanged<ServiceRequestStatus> onAction;
   final VoidCallback onChat;
+  final ServiceRequestNegotiation? negotiation;
+  final bool negotiationLoading;
+  final VoidCallback onNegotiationRetry;
+  final ValueChanged<ServiceQuote?> onQuote;
+  final ValueChanged<ServiceQuote> onAcceptQuote;
+  final VoidCallback onAddAttachment;
+  final ValueChanged<ServiceRequestAttachment> onDeleteAttachment;
   final VoidCallback? onReschedule;
 
   @override
@@ -30,6 +46,12 @@ class ServiceRequestDetailsView extends StatelessWidget {
         request.status == ServiceRequestStatus.accepted ||
         request.status == ServiceRequestStatus.inProgress ||
         request.status == ServiceRequestStatus.completed;
+    final quoteBlocksStart =
+        negotiation?.latestQuote?.status == ServiceQuoteStatus.proposed;
+    final availableActions = request.availableActions.where(
+      (action) =>
+          action != ServiceRequestStatus.inProgress || !quoteBlocksStart,
+    );
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -56,6 +78,18 @@ class ServiceRequestDetailsView extends StatelessWidget {
               _InfoRow(Icons.notes_rounded, 'Observação', request.note),
           ],
         ),
+        const SizedBox(height: 12),
+        ServiceRequestNegotiationCard(
+          request: request,
+          negotiation: negotiation,
+          loading: negotiationLoading,
+          acting: acting,
+          onRetry: onNegotiationRetry,
+          onPropose: onQuote,
+          onAccept: onAcceptQuote,
+          onAddAttachment: onAddAttachment,
+          onDeleteAttachment: onDeleteAttachment,
+        ),
         if (canChat) ...[
           const SizedBox(height: 12),
           AppButton(
@@ -78,9 +112,23 @@ class ServiceRequestDetailsView extends StatelessWidget {
             onPressed: acting ? null : onReschedule,
           ),
         ],
-        if (request.availableActions.isNotEmpty) ...[
+        if (quoteBlocksStart &&
+            request.availableActions.contains(
+              ServiceRequestStatus.inProgress,
+            )) ...[
+          const SizedBox(height: 16),
+          const Text(
+            'Resolva a proposta pendente antes de iniciar o serviço.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+        ],
+        if (availableActions.isNotEmpty) ...[
           const SizedBox(height: 22),
-          ...request.availableActions.map(
+          ...availableActions.map(
             (action) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: AppButton(

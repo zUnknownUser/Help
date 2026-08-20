@@ -2,10 +2,47 @@ package ports
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/vendlydigital/help/services/api/internal/domain/servicerequests"
 )
+
+type ServiceRequestNegotiationRepository interface {
+	GetNegotiation(context.Context, string, string) (servicerequests.Request, servicerequests.Negotiation, error)
+	ProposeQuote(context.Context, string, string, servicerequests.QuoteDraft) (servicerequests.Request, servicerequests.Negotiation, string, error)
+	AcceptQuote(context.Context, string, string, string, string, int, time.Time) (servicerequests.Request, servicerequests.Negotiation, string, error)
+	CreateAttachment(context.Context, string, string, servicerequests.Attachment) (servicerequests.Attachment, string, error)
+	GetAttachment(context.Context, string, string) (servicerequests.Attachment, error)
+	DeleteAttachment(context.Context, string, string, string) (string, string, error)
+}
+
+type ServiceRequestNegotiationResult struct {
+	Request     servicerequests.Request
+	Negotiation servicerequests.Negotiation
+}
+
+type ServiceRequestQuoteInput struct {
+	ClientCommandID string
+	ExpectedVersion int
+	Message         string
+	ExpiresAt       string
+	Items           []servicerequests.QuoteItemDraft
+}
+
+type ServiceRequestQuoteAcceptInput struct {
+	ClientCommandID string
+	ExpectedVersion int
+}
+
+type ServiceRequestNegotiationService interface {
+	Get(context.Context, string, string) (ServiceRequestNegotiationResult, error)
+	Propose(context.Context, string, string, ServiceRequestQuoteInput) (ServiceRequestNegotiationResult, error)
+	Accept(context.Context, string, string, string, ServiceRequestQuoteAcceptInput) (ServiceRequestNegotiationResult, error)
+	UploadAttachment(context.Context, string, string, string, string, io.Reader) (servicerequests.Attachment, error)
+	OpenAttachment(context.Context, string, string) (servicerequests.Attachment, MediaObject, error)
+	DeleteAttachment(context.Context, string, string, string) error
+}
 
 type ServiceRequestRepository interface {
 	FindByClientID(context.Context, string, string) (servicerequests.Request, error)

@@ -6,11 +6,15 @@ import '../domain/repositories/service_request_repository.dart';
 import 'service_request_remote_api.dart';
 import 'service_request_repository_impl.dart';
 
+final serviceRequestRemoteApiProvider = Provider<ServiceRequestRemoteApi>(
+  (ref) => ServiceRequestRemoteApi(
+    client: ref.watch(authenticatedHttpClientProvider),
+    baseUrl: AppConfig.apiBaseUrl,
+  ),
+);
+
 final serviceRequestRepositoryProvider = Provider<ServiceRequestRepository>(
   (ref) => ServiceRequestRepositoryImpl(
-    ServiceRequestRemoteApi(
-      client: ref.watch(authenticatedHttpClientProvider),
-      baseUrl: AppConfig.apiBaseUrl,
-    ),
+    ref.watch(serviceRequestRemoteApiProvider),
   ),
 );

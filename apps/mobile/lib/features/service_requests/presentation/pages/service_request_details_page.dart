@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/design_system/components/app_button.dart';
@@ -11,9 +14,12 @@ import '../../../scheduling/data/scheduling_providers.dart';
 import '../../../scheduling/presentation/controllers/slot_pager.dart';
 import '../../../scheduling/presentation/widgets/available_slots_picker.dart';
 import '../../domain/entities/service_request_item.dart';
+import '../../domain/entities/service_request_negotiation.dart';
 import '../../domain/failures/service_request_failure.dart';
 import '../providers/service_request_providers.dart';
 import '../widgets/service_request_details_view.dart';
+import '../widgets/service_quote_sheet.dart';
+import '../widgets/service_request_tile.dart';
 
 class ServiceRequestDetailsPage extends ConsumerStatefulWidget {
   const ServiceRequestDetailsPage({
@@ -36,6 +42,11 @@ class _ServiceRequestDetailsPageState
   ServiceRequestItem? _request;
   bool _loading = false;
   bool _acting = false;
+  bool _negotiationLoading = false;
+  ServiceRequestNegotiation? _negotiation;
+  String? _pendingQuoteCommandId;
+  ServiceQuoteDraft? _pendingQuoteDraft;
+  final _acceptCommandIds = <String, String>{};
   String? _rescheduleCommandId;
   DateTime? _rescheduleIntent;
 
@@ -43,28 +54,66 @@ class _ServiceRequestDetailsPageState
   void initState() {
     super.initState();
     _request = widget.initial;
-    if (_request == null) _load();
+    _load();
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: AppColors.background,
-    appBar: AppBar(title: const Text('Detalhes da solicitação')),
-    body: _loading && _request == null
-        ? const AppLoadingView(message: 'Carregando solicitação…')
-        : _request == null
-        ? ServiceRequestDetailsError(onRetry: _load)
-        : ServiceRequestDetailsView(
-            request: _request!,
-            acting: _acting,
-            onAction: _transition,
-            onChat: _openChat,
-            onReschedule: _canReschedule(_request!) ? _reschedule : null,
-          ),
-  );
+  Widget build(BuildContext context) {
+    ref.listen(serviceRequestRealtimeEventProvider, (_, next) {
+      next.whenData((event) {
+        if (event.data['request_id'] == widget.requestId) {
+          unawaited(_loadNegotiation());
+        }
+      });
+    });
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text('Detalhes da solicitação')),
+      body: _loading && _request == null
+          ? const AppLoadingView(message: 'Carregando solicitação…')
+          : _request == null
+          ? ServiceRequestDetailsError(onRetry: _load)
+          : ServiceRequestDetailsView(
+              request: _request!,
+              acting: _acting,
+              onAction: _transition,
+              onChat: _openChat,
+              onReschedule: _canReschedule(_request!) ? _reschedule : null,
+              negotiation: _negotiation,
+              negotiationLoading: _negotiationLoading,
+              onNegotiationRetry: _loadNegotiation,
+              onQuote: _openQuote,
+              onAcceptQuote: _acceptQuote,
+              onAddAttachment: _addAttachments,
+              onDeleteAttachment: _deleteAttachment,
+            ),
+    );
+  }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = _request == null;
+      _negotiationLoading = true;
+    });
+    final result = await ref
+        .read(serviceRequestActionsProvider)
+        .negotiation(widget.requestId);
+    if (!mounted) return;
+    result.fold(
+      onSuccess: (value) => setState(() {
+        _request = value.request;
+        _negotiation = value.negotiation;
+        _loading = false;
+        _negotiationLoading = false;
+      }),
+      onFailure: (_) {
+        setState(() => _negotiationLoading = false);
+        if (_request == null) unawaited(_loadRequestOnly());
+      },
+    );
+  }
+
+  Future<void> _loadRequestOnly() async {
     final result = await ref
         .read(serviceRequestActionsProvider)
         .get(widget.requestId);
@@ -75,6 +124,19 @@ class _ServiceRequestDetailsPageState
         _loading = false;
       }),
       onFailure: (_) => setState(() => _loading = false),
+    );
+  }
+
+  Future<void> _loadNegotiation() async {
+    if (_negotiationLoading) return;
+    setState(() => _negotiationLoading = true);
+    final result = await ref
+        .read(serviceRequestActionsProvider)
+        .negotiation(widget.requestId);
+    if (!mounted) return;
+    result.fold(
+      onSuccess: _applyNegotiationUpdate,
+      onFailure: (_) => setState(() => _negotiationLoading = false),
     );
   }
 
@@ -135,7 +197,243 @@ class _ServiceRequestDetailsPageState
       _request = confirmed;
       _acting = false;
     });
+    unawaited(_loadNegotiation());
   }
+
+  Future<void> _openQuote(ServiceQuote? previous) async {
+    final request = _request;
+    if (request == null || _acting) return;
+    final draft = await showModalBottomSheet<ServiceQuoteDraft>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * .92,
+      ),
+      builder: (_) => ServiceQuoteSheet(
+        currentPriceCents: request.quotedPriceCents,
+        previous: previous,
+        isCounterOffer: previous != null,
+      ),
+    );
+    if (draft == null || !mounted) return;
+    _pendingQuoteDraft = draft;
+    _pendingQuoteCommandId = const Uuid().v4();
+    await _submitQuote(draft, _pendingQuoteCommandId!);
+  }
+
+  Future<void> _submitQuote(
+    ServiceQuoteDraft draft,
+    String commandId,
+  ) async {
+    final request = _request;
+    if (request == null || _acting) return;
+    setState(() => _acting = true);
+    final result = await ref
+        .read(serviceRequestActionsProvider)
+        .proposeQuote(request: request, commandId: commandId, draft: draft);
+    if (!mounted) return;
+    result.fold(
+      onSuccess: (update) {
+        _pendingQuoteCommandId = null;
+        _pendingQuoteDraft = null;
+        _applyNegotiationUpdate(update);
+      },
+      onFailure: (failure) {
+        setState(() => _acting = false);
+        final retryable = _isRetryable(failure);
+        if (!retryable) {
+          _pendingQuoteCommandId = null;
+          _pendingQuoteDraft = null;
+        }
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              failure.message ?? 'Não foi possível enviar a proposta.',
+            ),
+            action: retryable
+                ? SnackBarAction(
+                    label: 'Tentar novamente',
+                    onPressed: () {
+                      final pending = _pendingQuoteDraft;
+                      final pendingId = _pendingQuoteCommandId;
+                      if (pending != null && pendingId != null) {
+                        unawaited(_submitQuote(pending, pendingId));
+                      }
+                    },
+                  )
+                : null,
+          ),
+        );
+        if (failure.type == ServiceRequestFailureType.conflict) {
+          unawaited(_load());
+        }
+      },
+    );
+  }
+
+  Future<void> _acceptQuote(ServiceQuote quote) async {
+    final request = _request;
+    if (request == null || _acting) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.verified_outlined, color: AppColors.primary),
+        title: const Text('Aceitar esta proposta?'),
+        content: Text(
+          'O valor combinado será atualizado para ${formatRequestPrice(quote.totalCents)} e ficará registrado no atendimento.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Revisar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Aceitar proposta'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final commandId = _acceptCommandIds.putIfAbsent(
+      quote.id,
+      const Uuid().v4,
+    );
+    await _submitAcceptance(quote, commandId);
+  }
+
+  Future<void> _submitAcceptance(ServiceQuote quote, String commandId) async {
+    final request = _request;
+    if (request == null || _acting) return;
+    setState(() => _acting = true);
+    final result = await ref
+        .read(serviceRequestActionsProvider)
+        .acceptQuote(
+          request: request,
+          quoteId: quote.id,
+          commandId: commandId,
+        );
+    if (!mounted) return;
+    result.fold(
+      onSuccess: (update) {
+        _acceptCommandIds.remove(quote.id);
+        _applyNegotiationUpdate(update);
+      },
+      onFailure: (failure) {
+        setState(() => _acting = false);
+        final retryable = _isRetryable(failure);
+        if (!retryable) _acceptCommandIds.remove(quote.id);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              failure.message ?? 'Não foi possível aceitar a proposta.',
+            ),
+            action: retryable
+                ? SnackBarAction(
+                    label: 'Tentar novamente',
+                    onPressed: () => unawaited(
+                      _submitAcceptance(quote, commandId),
+                    ),
+                  )
+                : null,
+          ),
+        );
+        if (failure.type == ServiceRequestFailureType.conflict) {
+          unawaited(_load());
+        }
+      },
+    );
+  }
+
+  Future<void> _addAttachments() async {
+    final negotiation = _negotiation;
+    if (negotiation == null || _acting) return;
+    final remaining =
+        maximumServiceRequestAttachments - negotiation.attachments.length;
+    if (remaining <= 0) return;
+    final images = await ImagePicker().pickMultiImage(
+      imageQuality: 84,
+      maxWidth: 1800,
+    );
+    if (images.isEmpty || !mounted) return;
+    final selected = images.take(remaining).toList(growable: false);
+    setState(() => _acting = true);
+    var failures = 0;
+    for (final image in selected) {
+      final result = await ref
+          .read(serviceRequestActionsProvider)
+          .uploadAttachment(requestId: widget.requestId, filePath: image.path);
+      result.fold(
+        onSuccess: (_) {},
+        onFailure: (_) => failures++,
+      );
+    }
+    if (!mounted) return;
+    setState(() => _acting = false);
+    await _loadNegotiation();
+    if (failures > 0 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            failures == 1
+                ? 'Uma imagem não pôde ser enviada.'
+                : '$failures imagens não puderam ser enviadas.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteAttachment(ServiceRequestAttachment attachment) async {
+    if (_acting) return;
+    setState(() => _acting = true);
+    final result = await ref
+        .read(serviceRequestActionsProvider)
+        .deleteAttachment(
+          requestId: widget.requestId,
+          attachmentId: attachment.id,
+        );
+    if (!mounted) return;
+    result.fold(
+      onSuccess: (_) {
+        setState(() => _acting = false);
+        ref.invalidate(serviceRequestAttachmentBytesProvider(attachment.id));
+        unawaited(_loadNegotiation());
+      },
+      onFailure: (failure) {
+        setState(() => _acting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              failure.message ?? 'Não foi possível remover a imagem.',
+            ),
+          ),
+        );
+        if (failure.type == ServiceRequestFailureType.conflict) {
+          unawaited(_load());
+        }
+      },
+    );
+  }
+
+  void _applyNegotiationUpdate(ServiceRequestNegotiationUpdate update) {
+    ref
+        .read(serviceRequestsControllerProvider.notifier)
+        .reconcile(update.request);
+    setState(() {
+      _request = update.request;
+      _negotiation = update.negotiation;
+      _acting = false;
+      _loading = false;
+      _negotiationLoading = false;
+    });
+  }
+
+  bool _isRetryable(ServiceRequestFailure failure) =>
+      failure.type == ServiceRequestFailureType.network ||
+      failure.type == ServiceRequestFailureType.unavailable;
 
   Future<String?> _confirmTransition(ServiceRequestStatus target) async {
     final controller = TextEditingController();
@@ -274,6 +572,7 @@ class _ServiceRequestDetailsPageState
           _request = confirmed;
           _acting = false;
         });
+        unawaited(_loadNegotiation());
       },
       onFailure: (failure) {
         setState(() {

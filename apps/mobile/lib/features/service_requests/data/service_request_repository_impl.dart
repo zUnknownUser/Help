@@ -1,5 +1,6 @@
 import '../../../../core/result/result.dart';
 import '../domain/entities/service_request_item.dart';
+import '../domain/entities/service_request_negotiation.dart';
 import '../domain/failures/service_request_failure.dart';
 import '../domain/repositories/service_request_repository.dart';
 import 'service_request_remote_api.dart';
@@ -56,6 +57,62 @@ class ServiceRequestRepositoryImpl implements ServiceRequestRepository {
       expectedVersion: expectedVersion,
     ),
   );
+
+  @override
+  Future<ServiceRequestResult<ServiceRequestNegotiationUpdate>> negotiation(
+    String requestId,
+  ) => _guard(() => _api.negotiation(requestId));
+
+  @override
+  Future<ServiceRequestResult<ServiceRequestNegotiationUpdate>> proposeQuote({
+    required ServiceRequestItem request,
+    required String clientCommandId,
+    required ServiceQuoteDraft draft,
+  }) => _guard(
+    () => _api.proposeQuote(
+      request: request,
+      clientCommandId: clientCommandId,
+      draft: draft,
+    ),
+  );
+
+  @override
+  Future<ServiceRequestResult<ServiceRequestNegotiationUpdate>> acceptQuote({
+    required ServiceRequestItem request,
+    required String quoteId,
+    required String clientCommandId,
+  }) => _guard(
+    () => _api.acceptQuote(
+      request: request,
+      quoteId: quoteId,
+      clientCommandId: clientCommandId,
+    ),
+  );
+
+  @override
+  Future<ServiceRequestResult<ServiceRequestAttachment>> uploadAttachment({
+    required String requestId,
+    required String filePath,
+    String caption = '',
+  }) => _guard(
+    () => _api.uploadAttachment(
+      requestId: requestId,
+      filePath: filePath,
+      caption: caption,
+    ),
+  );
+
+  @override
+  Future<ServiceRequestResult<bool>> deleteAttachment({
+    required String requestId,
+    required String attachmentId,
+  }) => _guard(() async {
+    await _api.deleteAttachment(
+      requestId: requestId,
+      attachmentId: attachmentId,
+    );
+    return true;
+  });
 
   Future<ServiceRequestResult<T>> _guard<T>(Future<T> Function() action) async {
     try {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/vendlydigital/help/services/api/internal/database"
 	domainrequests "github.com/vendlydigital/help/services/api/internal/domain/servicerequests"
 )
 
@@ -134,6 +135,22 @@ func (repository *Repository) Transition(
 	}
 	if !domainrequests.CanTransition(request.Status, transition.Target, role) {
 		return domainrequests.Request{}, domainrequests.ErrInvalidTransition
+	}
+	if transition.Target == domainrequests.StatusInProgress {
+		query, args, buildErr := database.Query.Select("count(*)").
+			From("service_request_quotes").
+			Where("request_id = ?::uuid", requestID).
+			Where("status = 'proposed'").ToSql()
+		if buildErr != nil {
+			return domainrequests.Request{}, fmt.Errorf("build pending quote check: %w", buildErr)
+		}
+		var pendingQuoteCount int
+		if err = tx.QueryRow(ctx, query, args...).Scan(&pendingQuoteCount); err != nil {
+			return domainrequests.Request{}, fmt.Errorf("check pending quote: %w", err)
+		}
+		if pendingQuoteCount > 0 {
+			return domainrequests.Request{}, domainrequests.ErrQuotePending
+		}
 	}
 	if transition.Target == domainrequests.StatusNoShow && time.Now().Before(request.ScheduledFor) {
 		return domainrequests.Request{}, domainrequests.ErrInvalidTransition

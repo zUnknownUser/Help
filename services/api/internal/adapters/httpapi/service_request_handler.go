@@ -130,7 +130,7 @@ func writeServiceRequestLifecycleError(w http.ResponseWriter, r *http.Request, e
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "Solicitação não encontrada."})
 	case errors.Is(err, domainrequests.ErrForbidden):
 		writeJSON(w, http.StatusForbidden, map[string]string{"message": "Você não pode realizar esta ação."})
-	case errors.Is(err, domainrequests.ErrInvalidStatus), errors.Is(err, domainrequests.ErrInvalidTransition), errors.Is(err, domainrequests.ErrInvalidSchedule):
+	case errors.Is(err, domainrequests.ErrInvalidStatus), errors.Is(err, domainrequests.ErrInvalidTransition), errors.Is(err, domainrequests.ErrInvalidSchedule), errors.Is(err, domainrequests.ErrQuotePending):
 		writeJSON(w, http.StatusConflict, map[string]string{"message": "Esta alteração não é permitida no estado atual."})
 	case errors.Is(err, domainrequests.ErrVersionConflict):
 		writeJSON(w, http.StatusConflict, map[string]string{"message": "A solicitação foi atualizada em outro dispositivo. Recarregue e tente novamente."})

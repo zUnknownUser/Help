@@ -161,6 +161,9 @@ func run() error {
 	}
 	chatMediaService := applicationchat.NewMediaService(postgreschat.NewRepository(pool), mediaStore)
 	profileMediaService := applicationprofiles.NewMediaService(profileRepository, mediaStore)
+	serviceRequestNegotiation := applicationrequests.NewNegotiationService(
+		serviceRequestRepository, mediaStore, realtimeHub, time.Now,
+	)
 	reviewService := applicationreviews.NewService(postgresreviews.NewRepository(pool))
 	iceConfigService := applicationchat.NewICEConfigService(applicationchat.ICEConfig{
 		STUNURLs:      cfg.RTC.STUNURLs,
@@ -186,6 +189,7 @@ func run() error {
 		ServiceDetailsGetter:       serviceDetails,
 		ServiceRequestCreator:      serviceRequests,
 		ServiceRequestLifecycle:    serviceRequestLifecycle,
+		ServiceRequestNegotiation:  serviceRequestNegotiation,
 		ReviewService:              reviewService,
 		ProviderScheduleManager:    scheduleService,
 		ServiceAvailability:        scheduleService,

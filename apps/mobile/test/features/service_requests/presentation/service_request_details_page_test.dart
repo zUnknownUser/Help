@@ -7,6 +7,7 @@ import 'package:help/features/profile/domain/entities/user_role.dart';
 import 'package:help/features/profile/presentation/controllers/profile_controller.dart';
 import 'package:help/features/profile/presentation/providers/profile_providers.dart';
 import 'package:help/features/service_requests/domain/entities/service_request_item.dart';
+import 'package:help/features/service_requests/domain/entities/service_request_negotiation.dart';
 import 'package:help/features/service_requests/domain/repositories/service_request_repository.dart';
 import 'package:help/features/service_requests/domain/use_cases/service_request_actions.dart';
 import 'package:help/features/service_requests/presentation/pages/service_request_details_page.dart';
@@ -23,6 +24,9 @@ void main() {
           serviceRequestActionsProvider.overrideWithValue(
             ServiceRequestActions(repository),
           ),
+          serviceRequestRealtimeEventProvider.overrideWith(
+            (ref) => const Stream.empty(),
+          ),
           currentProfileProvider.overrideWith(_ProfileControllerStub.new),
         ],
         child: MaterialApp(
@@ -33,6 +37,7 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Aceitar solicitação'));
     await tester.pumpAndSettle();
@@ -58,12 +63,24 @@ class _ProfileControllerStub extends ProfileController {
 class _RequestRepositoryFake implements ServiceRequestRepository {
   ServiceRequestStatus? target;
   int? expectedVersion;
+  ServiceRequestItem current = _request();
+
+  ServiceRequestNegotiationUpdate get _negotiationUpdate =>
+      ServiceRequestNegotiationUpdate(
+        request: current,
+        negotiation: const ServiceRequestNegotiation(
+          attachments: [],
+          quotes: [],
+          canAddAttachment: true,
+          canPropose: true,
+        ),
+      );
 
   @override
   Future<ServiceRequestResult<List<ServiceRequestItem>>> agenda({
     required DateTime from,
     required DateTime to,
-  }) async => Success([_request()]);
+  }) async => Success([current]);
 
   @override
   Future<ServiceRequestResult<ServiceRequestItem>> reschedule({
@@ -71,13 +88,14 @@ class _RequestRepositoryFake implements ServiceRequestRepository {
     required String clientCommandId,
     required DateTime scheduledFor,
     required int expectedVersion,
-  }) async => Success(
-    _request().copyWith(
+  }) async {
+    current = current.copyWith(
       scheduledFor: scheduledFor,
       status: ServiceRequestStatus.pending,
       version: expectedVersion + 1,
-    ),
-  );
+    );
+    return Success(current);
+  }
 
   @override
   Future<ServiceRequestResult<ServiceRequestItem>> transition({
@@ -89,18 +107,61 @@ class _RequestRepositoryFake implements ServiceRequestRepository {
   }) async {
     this.target = target;
     this.expectedVersion = expectedVersion;
-    return Success(
-      _request().copyWith(
-        status: target,
-        version: 1,
-        availableActions: {ServiceRequestStatus.inProgress},
-      ),
+    current = current.copyWith(
+      status: target,
+      version: 1,
+      availableActions: {ServiceRequestStatus.inProgress},
     );
+    return Success(current);
   }
 
   @override
   Future<ServiceRequestResult<ServiceRequestItem>> get(String id) async =>
-      Success(_request());
+      Success(current);
+
+  @override
+  Future<ServiceRequestResult<ServiceRequestNegotiationUpdate>> negotiation(
+    String requestId,
+  ) async => Success(_negotiationUpdate);
+
+  @override
+  Future<ServiceRequestResult<ServiceRequestNegotiationUpdate>> proposeQuote({
+    required ServiceRequestItem request,
+    required String clientCommandId,
+    required ServiceQuoteDraft draft,
+  }) async => Success(_negotiationUpdate);
+
+  @override
+  Future<ServiceRequestResult<ServiceRequestNegotiationUpdate>> acceptQuote({
+    required ServiceRequestItem request,
+    required String quoteId,
+    required String clientCommandId,
+  }) async => Success(_negotiationUpdate);
+
+  @override
+  Future<ServiceRequestResult<ServiceRequestAttachment>> uploadAttachment({
+    required String requestId,
+    required String filePath,
+    String caption = '',
+  }) async => Success(
+    ServiceRequestAttachment(
+      id: 'attachment-1',
+      uploaderName: 'Luis',
+      uploaderRole: RequestViewerRole.provider,
+      caption: caption,
+      contentType: 'image/jpeg',
+      byteSize: 100,
+      url: '/attachment-1',
+      createdAt: DateTime.utc(2026, 8, 17),
+      canDelete: true,
+    ),
+  );
+
+  @override
+  Future<ServiceRequestResult<bool>> deleteAttachment({
+    required String requestId,
+    required String attachmentId,
+  }) async => const Success(true);
 
   @override
   Future<ServiceRequestResult<ServiceRequestPageData>> list({
@@ -108,7 +169,7 @@ class _RequestRepositoryFake implements ServiceRequestRepository {
     String cursor = '',
     int limit = 20,
   }) async =>
-      Success(ServiceRequestPageData(items: [_request()], nextCursor: ''));
+      Success(ServiceRequestPageData(items: [current], nextCursor: ''));
 }
 
 ServiceRequestItem _request() => ServiceRequestItem(

@@ -1,5 +1,6 @@
 import '../../../../core/result/result.dart';
 import '../entities/service_request_item.dart';
+import '../entities/service_request_negotiation.dart';
 import '../failures/service_request_failure.dart';
 
 typedef ServiceRequestResult<T> = Result<T, ServiceRequestFailure>;
@@ -31,5 +32,32 @@ abstract interface class ServiceRequestRepository {
     required String clientCommandId,
     required DateTime scheduledFor,
     required int expectedVersion,
+  });
+
+  Future<ServiceRequestResult<ServiceRequestNegotiationUpdate>> negotiation(
+    String requestId,
+  );
+
+  Future<ServiceRequestResult<ServiceRequestNegotiationUpdate>> proposeQuote({
+    required ServiceRequestItem request,
+    required String clientCommandId,
+    required ServiceQuoteDraft draft,
+  });
+
+  Future<ServiceRequestResult<ServiceRequestNegotiationUpdate>> acceptQuote({
+    required ServiceRequestItem request,
+    required String quoteId,
+    required String clientCommandId,
+  });
+
+  Future<ServiceRequestResult<ServiceRequestAttachment>> uploadAttachment({
+    required String requestId,
+    required String filePath,
+    String caption = '',
+  });
+
+  Future<ServiceRequestResult<bool>> deleteAttachment({
+    required String requestId,
+    required String attachmentId,
   });
 }

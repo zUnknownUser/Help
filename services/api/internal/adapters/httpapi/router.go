@@ -37,6 +37,7 @@ type RouterDependencies struct {
 	ServiceDetailsGetter       ports.ServiceDetailsGetter
 	ServiceRequestCreator      ports.ServiceRequestCreator
 	ServiceRequestLifecycle    ports.ServiceRequestLifecycle
+	ServiceRequestNegotiation  ports.ServiceRequestNegotiationService
 	ReviewService              ports.ReviewService
 	ProviderScheduleManager    ports.ProviderScheduleManager
 	ServiceAvailability        ports.ServiceAvailability
@@ -119,6 +120,13 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 	mux.Handle("GET /v1/service-requests/{id}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(requestHandler.Details)))
 	mux.Handle("POST /v1/service-requests/{id}/transitions", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(requestHandler.Transition)))
 	mux.Handle("POST /v1/service-requests/{id}/reschedule", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(requestHandler.Reschedule)))
+	negotiationHandler := NewServiceRequestNegotiationHandler(dependencies.ServiceRequestNegotiation)
+	mux.Handle("GET /v1/service-requests/{id}/negotiation", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(negotiationHandler.Get)))
+	mux.Handle("POST /v1/service-requests/{id}/quotes", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(negotiationHandler.Propose)))
+	mux.Handle("POST /v1/service-requests/{id}/quotes/{quoteId}/accept", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(negotiationHandler.Accept)))
+	mux.Handle("POST /v1/service-requests/{id}/attachments", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(negotiationHandler.UploadAttachment)))
+	mux.Handle("GET /v1/service-request-attachments/{attachmentId}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(negotiationHandler.ServeAttachment)))
+	mux.Handle("DELETE /v1/service-requests/{id}/attachments/{attachmentId}", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(negotiationHandler.DeleteAttachment)))
 	reviewHandler := NewReviewHandler(dependencies.ReviewService)
 	mux.Handle("GET /v1/service-requests/{id}/reviews", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(reviewHandler.List)))
 	mux.Handle("PUT /v1/service-requests/{id}/reviews/mine", requireAuth(dependencies.TokenVerifier, http.HandlerFunc(reviewHandler.Create)))

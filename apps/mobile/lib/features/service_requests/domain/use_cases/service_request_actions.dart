@@ -1,4 +1,5 @@
 import '../entities/service_request_item.dart';
+import '../entities/service_request_negotiation.dart';
 import '../repositories/service_request_repository.dart';
 
 class ServiceRequestActions {
@@ -40,5 +41,47 @@ class ServiceRequestActions {
     clientCommandId: commandId,
     scheduledFor: scheduledFor,
     expectedVersion: request.version,
+  );
+
+  Future<ServiceRequestResult<ServiceRequestNegotiationUpdate>> negotiation(
+    String requestId,
+  ) => _repository.negotiation(requestId);
+
+  Future<ServiceRequestResult<ServiceRequestNegotiationUpdate>> proposeQuote({
+    required ServiceRequestItem request,
+    required String commandId,
+    required ServiceQuoteDraft draft,
+  }) => _repository.proposeQuote(
+    request: request,
+    clientCommandId: commandId,
+    draft: draft,
+  );
+
+  Future<ServiceRequestResult<ServiceRequestNegotiationUpdate>> acceptQuote({
+    required ServiceRequestItem request,
+    required String quoteId,
+    required String commandId,
+  }) => _repository.acceptQuote(
+    request: request,
+    quoteId: quoteId,
+    clientCommandId: commandId,
+  );
+
+  Future<ServiceRequestResult<ServiceRequestAttachment>> uploadAttachment({
+    required String requestId,
+    required String filePath,
+    String caption = '',
+  }) => _repository.uploadAttachment(
+    requestId: requestId,
+    filePath: filePath,
+    caption: caption,
+  );
+
+  Future<ServiceRequestResult<bool>> deleteAttachment({
+    required String requestId,
+    required String attachmentId,
+  }) => _repository.deleteAttachment(
+    requestId: requestId,
+    attachmentId: attachmentId,
   );
 }

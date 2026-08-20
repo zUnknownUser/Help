@@ -10,6 +10,8 @@ import '../../../home/domain/entities/service_offer.dart';
 import '../../../home/presentation/pages/location_page.dart';
 import '../../../home/presentation/providers/home_providers.dart';
 import '../../../home/presentation/widgets/home_image.dart';
+import '../../../service_requests/presentation/pages/service_request_details_page.dart';
+import '../../../service_requests/presentation/providers/service_request_providers.dart';
 import '../../domain/entities/service_details.dart';
 import '../../domain/entities/service_request.dart';
 import '../providers/service_details_providers.dart';
@@ -64,10 +66,21 @@ class ServiceDetailsPage extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => ServiceRequestSheet(details: details),
+      builder: (_) => ServiceRequestSheet(
+        details: details,
+        attachmentUploader: (requestId, filePath) async {
+          final result = await ref
+              .read(serviceRequestActionsProvider)
+              .uploadAttachment(requestId: requestId, filePath: filePath);
+          return result.fold(
+            onSuccess: (_) => true,
+            onFailure: (_) => false,
+          );
+        },
+      ),
     );
     if (receipt == null || !context.mounted) return;
-    await showDialog<void>(
+    final shouldTrack = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         icon: const Icon(
@@ -76,18 +89,47 @@ class ServiceDetailsPage extends ConsumerWidget {
           size: 42,
         ),
         title: const Text('Solicitação enviada'),
-        content: Text(
-          '${receipt.providerName} recebeu seu pedido para ${receipt.serviceTitle}. Você será avisado quando houver uma resposta.',
-          textAlign: TextAlign.center,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${receipt.providerName} recebeu seu pedido para ${receipt.serviceTitle}. Você será avisado quando houver uma resposta.',
+              textAlign: TextAlign.center,
+            ),
+            if (receipt.attachmentUploadFailures > 0) ...[
+              const SizedBox(height: 12),
+              Text(
+                receipt.attachmentUploadFailures == 1
+                    ? 'Uma foto não foi enviada. Você pode tentar novamente nos detalhes do pedido.'
+                    : '${receipt.attachmentUploadFailures} fotos não foram enviadas. Você pode tentar novamente nos detalhes do pedido.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.danger,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Entendi'),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Fechar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Acompanhar pedido'),
           ),
         ],
       ),
     );
+    if (shouldTrack == true && context.mounted) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => ServiceRequestDetailsPage(requestId: receipt.id),
+        ),
+      );
+    }
   }
 
   Future<void> _chat(
